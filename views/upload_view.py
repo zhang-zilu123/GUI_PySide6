@@ -32,7 +32,7 @@ class UploadView(QWidget):
         # 添加标题
         title = QLabel("数据审核工具 - 文件上传")
         title.setAlignment(Qt.AlignCenter)
-        title.setStyleSheet("font-size: 24px; font-weight: bold; margin-bottom: 30px;")
+        title.setStyleSheet("font-size: 20px; font-weight: bold; margin-bottom: 30px;")
         layout.addWidget(title)
         
         # 添加上传区域说明
@@ -55,6 +55,9 @@ class UploadView(QWidget):
                 border-color: #66b3ff;
                 background-color: #f0f8ff;
             }
+             QLabel {
+                border: none;
+            }                     
         """)
         upload_frame.setMinimumHeight(200)
         
@@ -62,24 +65,26 @@ class UploadView(QWidget):
         frame_layout = QVBoxLayout(upload_frame)
         frame_layout.setSpacing(15)
         frame_layout.setContentsMargins(20, 20, 20, 20)
-        
-        # 添加上传图标（使用文本代替实际图标）
-        upload_icon = QLabel("📁")
-        upload_icon.setAlignment(Qt.AlignCenter)
-        upload_icon.setStyleSheet("font-size: 48px;")
-        frame_layout.addWidget(upload_icon)
-        
-        # 添加上传提示文字
-        upload_text = QLabel("点击或拖拽文件到此处上传")
-        upload_text.setAlignment(Qt.AlignCenter)
-        upload_text.setStyleSheet("font-size: 16px; color: #888;")
-        frame_layout.addWidget(upload_text)
-        
-        # 添加支持格式说明
-        format_info = QLabel("支持格式: JSON, CSV, Excel")
-        format_info.setAlignment(Qt.AlignCenter)
-        format_info.setStyleSheet("font-size: 12px; color: #aaa;")
-        frame_layout.addWidget(format_info)
+
+        # 创建一个 QLabel 来显示所有文本
+        upload_info = QLabel(upload_frame)
+        upload_info.setWordWrap(True)  # 允许自动换行
+        upload_info.setAlignment(Qt.AlignCenter)  # 文本居中
+        upload_info.setStyleSheet("""
+            QLabel {
+                font-size: 16px;
+                color: #888;
+            }
+        """)
+
+        upload_info.setText("""
+        <div style="font-size: 48px;">📁</div>
+        <div style="font-size: 16px; color: #888;">点击或拖拽文件到此处上传</div>
+        <div style="font-size: 12px; color: #aaa;">支持格式: pdf</div>
+        """)
+
+        # 将 QLabel 添加到布局中
+        frame_layout.addWidget(upload_info)
         
         layout.addWidget(upload_frame)
         
@@ -88,7 +93,7 @@ class UploadView(QWidget):
         button_layout.setSpacing(10)
         
         # 添加上传按钮
-        self.upload_button = QPushButton("选择文件并上传")
+        self.upload_button = QPushButton("上传")
         self.upload_button.setStyleSheet("""
             QPushButton {
                 background-color: #4CAF50;
@@ -105,55 +110,25 @@ class UploadView(QWidget):
                 background-color: #3d8b40;
             }
         """)
+
         self.upload_button.setCursor(Qt.PointingHandCursor)
-        button_layout.addWidget(self.upload_button)
-        
-        layout.addLayout(button_layout)
-        
-        # 添加上传区域点击事件
-        upload_frame.mousePressEvent = self._on_upload_area_clicked
-        
-        # 连接按钮点击事件
-        self.upload_button.clicked.connect(self._on_upload_button_clicked)
+        layout.addWidget(self.upload_button)
         
         # 启用拖放功能
         self.setAcceptDrops(True)
         
-    def _on_upload_area_clicked(self, event):
-        """处理上传区域点击事件"""
-        self._open_file_dialog()
-        
-    def _on_upload_button_clicked(self):
-        """处理上传按钮点击事件"""
-        self._open_file_dialog()
-        
-    def _open_file_dialog(self):
-        """打开文件选择对话框"""
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, 
-            "选择文件", 
-            "", 
-            "支持的文件类型 (*.json *.csv *.xlsx *.xls);;所有文件 (*.*)"
-        )
-        
-        if file_path:
-            self.upload_requested.emit(file_path)
-            
-    def dragEnterEvent(self, event: QDragEnterEvent):
-        """处理拖拽进入事件"""
-        if event.mimeData().hasUrls():
-            event.acceptProposedAction()
-            
-    def dropEvent(self, event: QDropEvent):
-        """处理拖放事件"""
-        urls = event.mimeData().urls()
-        if urls:
-            file_path = urls[0].toLocalFile()
-            if file_path:
-                self.upload_requested.emit(file_path)
+    def update_upload_info(self, text, is_error=False):
+        """更新上传区域显示信息"""
+        color = "#d32f2f" if is_error else "#888"
+        self.upload_info.setText(f"""
+        <div style="font-size: 48px;">📁</div>
+        <div style="font-size: 16px; color: {color};">{text}</div>
+        <div style="font-size: 12px; color: #aaa;">支持格式: pdf</div>
+        """)
 
 
-def main():
+
+if __name__ == "__main__":
     """主函数，用于启动应用程序"""
     # 创建QApplication实例
     app = QApplication(sys.argv)
@@ -162,16 +137,9 @@ def main():
     upload_view = UploadView()
     upload_view.setWindowTitle("数据审核工具")
     upload_view.resize(600, 500)
-    
-    # 连接上传信号到处理函数
-    upload_view.upload_requested.connect(lambda path: print(f"文件上传请求: {path}"))
-    
+       
     # 显示界面
     upload_view.show()
     
     # 运行应用程序
     sys.exit(app.exec())
-
-
-if __name__ == "__main__":
-    main()

@@ -5,7 +5,7 @@
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
                                QPushButton, QTableWidget, QTableWidgetItem,
                                QHeaderView, QTextEdit, QApplication)
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Signal, Qt
 import sys
 
 class PreviewView(QWidget):
@@ -24,8 +24,35 @@ class PreviewView(QWidget):
         # 设置界面布局和样式
         self._setup_ui()
         
-        # 加载示例数据（实际应用中应从编辑界面传递）
+        # 加载示例数据（实际应用中应从编辑界面传递，需要更改）
         self._load_sample_data()
+
+    # 仅为了可以展示界面，后续需要删除
+    def _load_sample_data(self):
+        """加载示例数据"""
+        # 设置表格的行列数
+        self.preview_table.setRowCount(5)
+        self.preview_table.setColumnCount(4)
+        
+        # 设置表头
+        self.preview_table.setHorizontalHeaderLabels(["姓名", "年龄", "职业", "城市"])
+        
+        # 示例数据
+        sample_data = [
+            ["张三", "28", "工程师", "北京"],
+            ["李四", "32", "设计师", "上海"],
+            ["王五", "25", "产品经理", "深圳"],
+            ["赵六", "30", "教师", "广州"],
+            ["钱七", "27", "医生", "杭州"]
+        ]
+        
+        # 填充数据
+        for row, rowData in enumerate(sample_data):
+            for col, text in enumerate(rowData):
+                self.preview_table.setItem(row, col, self.create_table_item(text))
+        
+        # 设置摘要信息
+        self.summary_text.setText("总记录数: 5\n包含字段: 姓名, 年龄, 职业, 城市")
         
     def _setup_ui(self):
         """设置界面UI元素"""
@@ -37,11 +64,13 @@ class PreviewView(QWidget):
         
         # 添加标题
         title = QLabel("数据预览与确认")
+        title.setAlignment(Qt.AlignCenter)
         title.setStyleSheet("font-size: 20px; font-weight: bold;")
         main_layout.addWidget(title)
         
         # 添加说明文字
         instruction = QLabel("请确认以下数据无误后点击上传按钮")
+        instruction.setAlignment(Qt.AlignCenter)
         instruction.setStyleSheet("color: #666; margin-bottom: 15px;")
         main_layout.addWidget(instruction)
         
@@ -115,47 +144,15 @@ class PreviewView(QWidget):
         button_layout.addWidget(self.upload_button)
         
         main_layout.addLayout(button_layout)
-        
-        # 连接按钮点击事件
-        self.back_button.clicked.connect(self._on_back_clicked)
-        self.upload_button.clicked.connect(self._on_upload_clicked)
-        
-    def _load_sample_data(self):
-        """加载示例数据到表格"""
-        # 设置表格行列数
-        self.preview_table.setRowCount(3)
-        self.preview_table.setColumnCount(4)
-        
-        # 设置表头
-        headers = ["ID", "名称", "数值", "状态"]
-        self.preview_table.setHorizontalHeaderLabels(headers)
-        
-        # 填充示例数据
-        for row in range(3):
-            for col in range(4):
-                item = QTableWidgetItem(f"预览数据 {row+1}-{col+1}")
-                self.preview_table.setItem(row, col, item)
-                
-        # 设置摘要信息
-        self.summary_text.setPlainText("总计: 3条记录\n状态: 已审核\n准备上传")
-        
-    def _on_back_clicked(self):
-        """处理返回编辑按钮点击事件"""
-        self.back_to_edit_requested.emit()
-        
-    def _on_upload_clicked(self):
-        """处理上传按钮点击事件"""
-        # 收集最终数据（这里使用示例数据）
-        final_data = {
-            "total_records": 3,
-            "status": "已审核",
-            "data": [{"id": i+1, "name": f"预览数据 {i+1}-1", "value": f"预览数据 {i+1}-2", "status": f"预览数据 {i+1}-3"} 
-                    for i in range(3)]
-        }
-        self.final_upload_requested.emit(final_data)
 
+    def create_table_item(self, text):
+        """创建表格项"""
+        item = QTableWidgetItem(text)
+        item.setTextAlignment(Qt.AlignCenter)
+        return item
+        
 
-def main():
+if __name__ == "__main__":
     """主函数，用于启动应用程序"""
     # 创建QApplication实例
     app = QApplication(sys.argv)
@@ -165,16 +162,9 @@ def main():
     preview_view.setWindowTitle("数据审核工具 - 预览")
     preview_view.resize(800, 600)
     
-    # 连接信号到处理函数
-    preview_view.back_to_edit_requested.connect(lambda: print("返回编辑界面"))
-    preview_view.final_upload_requested.connect(lambda data: print(f"最终上传数据: {data}"))
     
     # 显示界面
     preview_view.show()
     
     # 运行应用程序
     sys.exit(app.exec())
-
-
-if __name__ == "__main__":
-    main()

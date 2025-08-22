@@ -5,6 +5,9 @@ from PySide6.QtWidgets import QMainWindow, QStackedWidget, QStatusBar
 from views.upload_view import UploadView
 from views.edit_view import EditView
 from views.preview_view import PreviewView
+from controllers.upload_controller import UploadController
+from controllers.edit_controller import EditController
+from controllers.preview_controller import PreviewController
 
 class MainWindow(QMainWindow):
     """应用程序主窗口，负责管理不同界面间的切换"""
@@ -26,7 +29,7 @@ class MainWindow(QMainWindow):
         self.setStatusBar(self.status_bar)
         self.status_bar.showMessage("就绪")
         
-        # 初始化界面
+        # 初始化界面和控制器
         self._init_ui()
         
     def _init_ui(self):
@@ -37,6 +40,11 @@ class MainWindow(QMainWindow):
         self.edit_view = EditView()
         self.preview_view = PreviewView()
         
+        # 创建对应的控制器
+        self.upload_controller = UploadController(self.upload_view)
+        self.edit_controller = EditController(self.edit_view)
+        self.preview_controller = PreviewController(self.preview_view)
+        
         # 将界面添加到堆叠窗口中
         self.stacked_widget.addWidget(self.upload_view)
         self.stacked_widget.addWidget(self.edit_view)
@@ -45,43 +53,50 @@ class MainWindow(QMainWindow):
         # 设置当前显示的界面（默认显示上传界面）
         self.stacked_widget.setCurrentWidget(self.upload_view)
         
-        # 连接界面信号（这里只创建信号连接，不实现具体功能）
+        # 连接界面信号
         self._connect_signals()
         
     def _connect_signals(self):
-        """连接各个界面发出的信号（功能未实现）"""
+        """连接各个界面发出的信号"""
         # 上传界面信号
-        self.upload_view.upload_requested.connect(self._on_upload_requested)
+        self.upload_controller.file_processed.connect(self._on_file_processed)
         
         # 编辑界面信号
-        self.edit_view.save_requested.connect(self._on_save_requested)
-        self.edit_view.cancel_requested.connect(self._on_cancel_editing)
+        self.edit_controller.data_saved.connect(self._on_data_saved)
+        self.edit_controller.edit_cancelled.connect(self._on_edit_cancelled)
         
         # 预览界面信号
-        self.preview_view.final_upload_requested.connect(self._on_final_upload_requested)
-        self.preview_view.back_to_edit_requested.connect(self._on_back_to_edit_requested)
+        self.preview_controller.final_upload_requested.connect(self._on_final_upload_requested)
+        self.preview_controller.back_to_edit_requested.connect(self._on_back_to_edit_requested)
         
-    def _on_upload_requested(self):
-        """处理上传文件请求（功能未实现）"""
-        # 此处应实现文件上传逻辑
-        self.status_bar.showMessage("文件上传功能未实现")
+    def _on_file_processed(self, file_path, data):
+        """处理文件处理完成事件"""
+        self.status_bar.showMessage(f"文件处理完成: {file_path}")
+        # 切换到编辑界面并传递数据
+        self.edit_controller.set_data(data)
+        self.stacked_widget.setCurrentWidget(self.edit_view)
         
-    def _on_save_requested(self, data):
-        """处理保存数据请求（功能未实现）"""
-        # 此处应实现数据保存逻辑
-        self.status_bar.showMessage("数据保存功能未实现")
+    def _on_data_saved(self, data):
+        """处理数据保存事件"""
+        self.status_bar.showMessage("数据已保存")
+        # 切换到预览界面并传递数据
+        self.preview_controller.set_data(data)
+        self.stacked_widget.setCurrentWidget(self.preview_view)
         
-    def _on_cancel_editing(self):
-        """处理取消编辑请求（功能未实现）"""
-        # 此处应实现取消编辑逻辑
-        self.status_bar.showMessage("取消编辑功能未实现")
+    def _on_edit_cancelled(self):
+        """处理取消编辑事件"""
+        self.status_bar.showMessage("编辑已取消")
+        # 返回到上传界面
+        self.stacked_widget.setCurrentWidget(self.upload_view)
         
     def _on_final_upload_requested(self, data):
-        """处理最终上传请求（功能未实现）"""
-        # 此处应实现最终上传逻辑
-        self.status_bar.showMessage("最终上传功能未实现")
+        """处理最终上传请求"""
+        self.status_bar.showMessage("数据已上传")
+        # 这里可以添加实际的上传逻辑
+        print(f"最终上传数据: {data}")
         
     def _on_back_to_edit_requested(self):
-        """处理返回编辑请求（功能未实现）"""
-        # 此处应实现返回编辑界面逻辑
-        self.status_bar.showMessage("返回编辑功能未实现")
+        """处理返回编辑请求"""
+        self.status_bar.showMessage("返回编辑")
+        # 返回到编辑界面
+        self.stacked_widget.setCurrentWidget(self.edit_view)
