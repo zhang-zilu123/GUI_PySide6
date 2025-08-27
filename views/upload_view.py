@@ -42,10 +42,10 @@ class UploadView(QWidget):
         layout.addWidget(instruction)
         
         # 创建上传区域（带虚线边框的框架）
-        upload_frame = QFrame()
-        upload_frame.setFrameStyle(QFrame.Box)
-        upload_frame.setLineWidth(2)
-        upload_frame.setStyleSheet("""
+        self.upload_frame = QFrame()
+        self.upload_frame.setFrameStyle(QFrame.Box)
+        self.upload_frame.setLineWidth(2)
+        self.upload_frame.setStyleSheet("""
             QFrame {
                 border: 2px dashed #ccc;
                 border-radius: 10px;
@@ -59,35 +59,35 @@ class UploadView(QWidget):
                 border: none;
             }                     
         """)
-        upload_frame.setMinimumHeight(200)
+        self.upload_frame.setMinimumHeight(200)
         
         # 设置上传区域布局
-        frame_layout = QVBoxLayout(upload_frame)
+        frame_layout = QVBoxLayout(self.upload_frame)
         frame_layout.setSpacing(15)
         frame_layout.setContentsMargins(20, 20, 20, 20)
 
         # 创建一个 QLabel 来显示所有文本
-        upload_info = QLabel(upload_frame)
-        upload_info.setWordWrap(True)  # 允许自动换行
-        upload_info.setAlignment(Qt.AlignCenter)  # 文本居中
-        upload_info.setStyleSheet("""
+        self.upload_info = QLabel(self.upload_frame)
+        self.upload_info.setWordWrap(True)  # 允许自动换行
+        self.upload_info.setAlignment(Qt.AlignCenter)  # 文本居中
+        self.upload_info.setStyleSheet("""
             QLabel {
                 font-size: 16px;
                 color: #888;
             }
         """)
 
-        upload_info.setText("""
+        self.upload_info.setText("""
         <div style="font-size: 48px;">📁</div>
         <div style="font-size: 16px; color: #888;">点击或拖拽文件到此处上传</div>
         <div style="font-size: 12px; color: #aaa;">支持格式: pdf</div>
         """)
 
         # 将 QLabel 添加到布局中
-        frame_layout.addWidget(upload_info)
-        
-        layout.addWidget(upload_frame)
-        
+        frame_layout.addWidget(self.upload_info)
+
+        layout.addWidget(self.upload_frame)
+
         # 添加底部按钮区域
         button_layout = QVBoxLayout()
         button_layout.setSpacing(10)
