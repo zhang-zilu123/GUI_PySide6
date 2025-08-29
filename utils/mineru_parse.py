@@ -19,45 +19,51 @@ from mineru.utils.models_download_utils import auto_download_and_get_model_root_
 
 
 def do_parse(
-    output_dir,  # Output directory for storing parsing results
-    pdf_file_names: list[str],  # List of PDF file names to be parsed
-    pdf_bytes_list: list[bytes],  # List of PDF bytes to be parsed
-    p_lang_list: list[str],  # List of languages for each PDF, default is 'ch' (Chinese)
-    backend="pipeline",  # The backend for parsing PDF, default is 'pipeline'
-    parse_method="auto",  # The method for parsing PDF, default is 'auto'
-    formula_enable=True,  # Enable formula parsing
-    table_enable=True,  # Enable table parsing
-    server_url=None,  # Server URL for vlm-sglang-client backend
-    f_draw_layout_bbox=True,  # Whether to draw layout bounding boxes
-    f_draw_span_bbox=True,  # Whether to draw span bounding boxes
-    f_dump_md=True,  # Whether to dump markdown files
-    f_dump_middle_json=True,  # Whether to dump middle JSON files
-    f_dump_model_output=True,  # Whether to dump model output files
-    f_dump_orig_pdf=True,  # Whether to dump original PDF files
-    f_dump_content_list=True,  # Whether to dump content list files
-    f_make_md_mode=MakeMode.MM_MD,  # The mode for making markdown content, default is MM_MD
-    start_page_id=0,  # Start page ID for parsing, default is 0
-    end_page_id=None,  # End page ID for parsing, default is None (parse all pages until the end of the document)
+        output_dir,  # Output directory for storing parsing results
+        pdf_file_names: list[str],  # List of PDF file names to be parsed
+        pdf_bytes_list: list[bytes],  # List of PDF bytes to be parsed
+        p_lang_list: list[str],  # List of languages for each PDF, default is 'ch' (Chinese)
+        backend="pipeline",  # The backend for parsing PDF, default is 'pipeline'
+        parse_method="auto",  # The method for parsing PDF, default is 'auto'
+        formula_enable=True,  # Enable formula parsing
+        table_enable=True,  # Enable table parsing
+        server_url=None,  # Server URL for vlm-sglang-client backend
+        f_draw_layout_bbox=True,  # Whether to draw layout bounding boxes
+        f_draw_span_bbox=True,  # Whether to draw span bounding boxes
+        f_dump_md=True,  # Whether to dump markdown files
+        f_dump_middle_json=True,  # Whether to dump middle JSON files
+        f_dump_model_output=True,  # Whether to dump model output files
+        f_dump_orig_pdf=True,  # Whether to dump original PDF files
+        f_dump_content_list=True,  # Whether to dump content list files
+        f_make_md_mode=MakeMode.MM_MD,  # The mode for making markdown content, default is MM_MD
+        start_page_id=0,  # Start page ID for parsing, default is 0
+        end_page_id=None,  # End page ID for parsing, default is None (parse all pages until the end of the document)
 ):
-
+    local_md_dirs = []
     if backend == "pipeline":
         for idx, pdf_bytes in enumerate(pdf_bytes_list):
             new_pdf_bytes = convert_pdf_bytes_to_bytes_by_pypdfium2(pdf_bytes, start_page_id, end_page_id)
             pdf_bytes_list[idx] = new_pdf_bytes
 
-        infer_results, all_image_lists, all_pdf_docs, lang_list, ocr_enabled_list = pipeline_doc_analyze(pdf_bytes_list, p_lang_list, parse_method=parse_method, formula_enable=formula_enable,table_enable=table_enable)
+        infer_results, all_image_lists, all_pdf_docs, lang_list, ocr_enabled_list = pipeline_doc_analyze(pdf_bytes_list,
+                                                                                                         p_lang_list,
+                                                                                                         parse_method=parse_method,
+                                                                                                         formula_enable=formula_enable,
+                                                                                                         table_enable=table_enable)
 
         for idx, model_list in enumerate(infer_results):
             model_json = copy.deepcopy(model_list)
             pdf_file_name = pdf_file_names[idx]
             local_image_dir, local_md_dir = prepare_env(output_dir, pdf_file_name, parse_method)
+            local_md_dirs.append(local_md_dir)
             image_writer, md_writer = FileBasedDataWriter(local_image_dir), FileBasedDataWriter(local_md_dir)
 
             images_list = all_image_lists[idx]
             pdf_doc = all_pdf_docs[idx]
             _lang = lang_list[idx]
             _ocr_enable = ocr_enabled_list[idx]
-            middle_json = pipeline_result_to_middle_json(model_list, images_list, pdf_doc, image_writer, _lang, _ocr_enable, formula_enable)
+            middle_json = pipeline_result_to_middle_json(model_list, images_list, pdf_doc, image_writer, _lang,
+                                                         _ocr_enable, formula_enable)
 
             pdf_info = middle_json["pdf_info"]
 
@@ -76,7 +82,6 @@ def do_parse(
 
             if f_dump_md:
                 image_dir = str(os.path.basename(local_image_dir))
-                print('image_dir', image_dir)
                 md_content_str = pipeline_union_make(pdf_info, f_make_md_mode, image_dir)
                 md_writer.write_string(
                     f"{pdf_file_name}.md",
@@ -104,6 +109,7 @@ def do_parse(
             #     )
 
             logger.info(f"local output dir is {local_md_dir}")
+        return local_md_dirs
     else:
         if backend.startswith("vlm-"):
             backend = backend[4:]
@@ -115,7 +121,8 @@ def do_parse(
             pdf_bytes = convert_pdf_bytes_to_bytes_by_pypdfium2(pdf_bytes, start_page_id, end_page_id)
             local_image_dir, local_md_dir = prepare_env(output_dir, pdf_file_name, parse_method)
             image_writer, md_writer = FileBasedDataWriter(local_image_dir), FileBasedDataWriter(local_md_dir)
-            middle_json, infer_result = vlm_doc_analyze(pdf_bytes, image_writer=image_writer, backend=backend, server_url=server_url)
+            middle_json, infer_result = vlm_doc_analyze(pdf_bytes, image_writer=image_writer, backend=backend,
+                                                        server_url=server_url)
 
             pdf_info = middle_json["pdf_info"]
 
@@ -183,7 +190,7 @@ def parse_doc(
             file_name_list.append(file_name)
             pdf_bytes_list.append(pdf_bytes)
             lang_list.append(lang)
-        do_parse(
+        local_md_dirs = do_parse(
             output_dir=output_dir,
             pdf_file_names=file_name_list,
             pdf_bytes_list=pdf_bytes_list,
@@ -194,6 +201,6 @@ def parse_doc(
             start_page_id=start_page_id,
             end_page_id=end_page_id
         )
+        return local_md_dirs
     except Exception as e:
         logger.exception(e)
-

@@ -91,12 +91,14 @@ class MainWindow(QMainWindow):
     def _on_file_processed(self, file_path, data):
         """提取数据完成，传递数据给编辑界面"""
         self.status_bar.showMessage(f"文件处理完成: {file_path}")
-        # 将处理完成的文件数据添加到列表中
-        # 添加文件名信息到数据中
-        data_with_filename = data.copy()
-        data_with_filename['_filename'] = file_path
-        self.processed_files_data.append(data_with_filename)
-        
+        print('处理完成的文件:', data)
+        # 直接保存原始数据，不修改结构
+        if isinstance(data, list):
+            self.processed_files_data.extend(data)
+        elif isinstance(data, dict):
+            self.processed_files_data.append(data)
+        else:
+            print(f"未知的数据格式: {type(data)}")
     def _on_data_saved(self, data):
         """处理数据保存事件"""
         self.status_bar.showMessage("数据已保存")
