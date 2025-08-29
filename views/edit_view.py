@@ -22,9 +22,6 @@ class EditView(QWidget):
         # 设置界面布局和样式
         self._setup_ui()
 
-        # 设置固定的窗口大小
-        self.setFixedSize(700, 600)
-        
     def _setup_ui(self):
         """设置界面UI元素"""
         # 创建主布局
