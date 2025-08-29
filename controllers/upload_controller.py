@@ -6,8 +6,8 @@
 import os
 import shutil
 import json
-from PySide6.QtWidgets import QFileDialog, QMessageBox
-from PySide6.QtCore import QObject, Signal, QThread
+from PySide6.QtWidgets import QFileDialog, QMessageBox,QHBoxLayout,QPushButton
+from PySide6.QtCore import QObject, Signal, QThread,Qt
 from utils.mineru_parse import parse_doc
 from utils.model_md_to_json import extract_info_from_md
 from config.config import EXTRA_FIELD
@@ -108,9 +108,12 @@ class UploadController(QObject):
         self._open_file_dialog()
     def _on_files_dropped(self, file_paths):
         """处理拖拽文件事件"""
+        valid_files = []
         for file_path in file_paths:
-            if self._process_file(file_path):  # 验证文件格式
-                self._add_file_to_list(file_path)
+            if self._validate_file(file_path):  # 验证文件格式
+                valid_files.append(file_path)
+        if valid_files:
+            self.add_uploaded_file(valid_files)
             
     def _open_file_dialog(self):
         """打开文件选择对话框"""
@@ -122,33 +125,174 @@ class UploadController(QObject):
         )
 
         if file_paths:
+            valid_files = []
             for file_path in file_paths:
-                if self._process_file(file_path):  # 验证文件格式
-                    self._add_file_to_list(file_path)
+                if self._validate_file(file_path):  # 验证文件格式
+                    valid_files.append(file_path)
+            if valid_files:
+                self.add_uploaded_file(valid_files)
     def show_file_list(self):
         """显示文件列表，隐藏上传信息框"""
         self.view.upload_frame.setVisible(False)
-        self.view.file_list.setVisible(True)
+        self.view.scroll_area.setVisible(True)
+        self.view.files_widget.setVisible(True)
         self.view.clear_button.setVisible(True)
+    
     def hide_file_list(self):
         """隐藏文件列表，显示上传信息框"""
         self.view.upload_frame.setVisible(True)
-        self.view.file_list.setVisible(False)
+        self.view.scroll_area.setVisible(False)
+        self.view.files_widget.setVisible(False)
         self.view.clear_button.setVisible(False)
 
-    def _add_file_to_list(self, file_path):
-        """添加文件到上传列表"""
-        if file_path not in self.uploaded_files:
-            self.uploaded_files.append(file_path)
-            self.add_uploaded_file(file_path)
-
-    def add_uploaded_file(self, file_path):
-        """添加上传的文件到列表"""
-        file_name = os.path.basename(file_path)
-        self.view.file_list.addItem(file_name)
+    def add_files(self, files):
+        """添加文件到界面"""
+        has_new_files = False
+        for file_path in files:
+            if file_path not in self.uploaded_files:
+                self.uploaded_files.append(file_path)
+                has_new_files = True
+                
+                # 为每个文件创建一个水平布局，包含文件名按钮和删除按钮
+                file_layout = QHBoxLayout()
+                file_layout.setContentsMargins(0, 0, 0, 0)
+                
+                # 文件名按钮
+                file_button = QPushButton(os.path.basename(file_path))
+                file_button.setToolTip(file_path)
+                file_button.setStyleSheet("""
+                    QPushButton {
+                        text-align: left;
+                        padding: 8px;
+                        border: none;
+                        background-color: transparent;
+                        border-bottom: 1px solid #eee;
+                    }
+                    QPushButton:hover {
+                        background-color: #f5f5f5;
+                    }
+                """)
+                file_button.setCursor(Qt.PointingHandCursor)
+                
+                # 删除按钮
+                delete_button = QPushButton("×")
+                delete_button.setFixedSize(24, 24)
+                delete_button.setStyleSheet("""
+                    QPushButton {
+                        background-color: #ff4444;
+                        color: white;
+                        border-radius: 12px;
+                        font-weight: bold;
+                    }
+                    QPushButton:hover {
+                        background-color: #cc0000;
+                    }
+                """)
+                delete_button.setCursor(Qt.PointingHandCursor)
+                delete_button.clicked.connect(lambda checked, fp=file_path: self._remove_file(fp))
+                
+                file_layout.addWidget(file_button)
+                file_layout.addStretch()
+                file_layout.addWidget(delete_button)
+                
+                self.view.files_layout.addLayout(file_layout)
         
-        # 显示文件列表，隐藏上传信息框
-        self.show_file_list()
+        # 如果有新文件添加，显示文件区域和分析按钮
+        if has_new_files and len(self.uploaded_files) > 0:
+            self.view.scroll_area.setVisible(True)
+            self.view.files_widget.setVisible(True)
+            self.view.analyze_button.setVisible(True)
+        
+        # 如果有新文件添加，显示文件区域和分析按钮
+        if has_new_files and len(self.uploaded_files) > 0:
+            self.view.scroll_area.setVisible(True)
+            self.view.files_widget.setVisible(True)
+            self.view.analyze_button.setVisible(True)
+        
+        # 发出文件添加信号
+        self.view.files_dropped.emit(self.uploaded_files)
+    
+    def _remove_file(self, file_path):
+        """删除指定文件"""
+        if file_path in self.uploaded_files:
+            # 从文件路径列表中移除
+            self.uploaded_files.remove(file_path)
+            
+            # 重新构建文件显示区域
+            self._rebuild_file_list()
+            
+            # 如果没有文件了，隐藏相关区域
+            if len(self.uploaded_files) == 0:
+                self.view.scroll_area.setVisible(False)
+                self.view.files_widget.setVisible(False)
+                self.view.analyze_button.setVisible(False)
+    
+    def _rebuild_file_list(self):
+        """重新构建文件列表显示"""
+        # 清除现有布局中的所有控件
+        while self.view.files_layout.count():
+            child = self.view.files_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+            elif child.layout():
+                # 递归删除布局中的控件
+                sub_layout = child.layout()
+                while sub_layout.count():
+                    sub_child = sub_layout.takeAt(0)
+                    if sub_child.widget():
+                        sub_child.widget().deleteLater()
+        
+        # 重新添加所有文件
+        for file_path in self.uploaded_files:
+            # 为每个文件创建一个水平布局，包含文件名按钮和删除按钮
+            file_layout = QHBoxLayout()
+            file_layout.setContentsMargins(0, 0, 0, 0)
+            
+            # 文件名按钮
+            file_button = QPushButton(os.path.basename(file_path))
+            file_button.setToolTip(file_path)
+            file_button.setStyleSheet("""
+                QPushButton {
+                    text-align: left;
+                    padding: 8px;
+                    border: none;
+                    background-color: transparent;
+                    border-bottom: 1px solid #eee;
+                }
+                QPushButton:hover {
+                    background-color: #f5f5f5;
+                }
+            """)
+            file_button.setCursor(Qt.PointingHandCursor)
+            
+            # 删除按钮
+            delete_button = QPushButton("×")
+            delete_button.setFixedSize(24, 24)
+            delete_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #ff4444;
+                    color: white;
+                    border-radius: 12px;
+                    font-weight: bold;
+                }
+                QPushButton:hover {
+                    background-color: #cc0000;
+                }
+            """)
+            delete_button.setCursor(Qt.PointingHandCursor)
+            delete_button.clicked.connect(lambda checked, fp=file_path: self._remove_file(fp))
+            
+            file_layout.addWidget(file_button)
+            file_layout.addStretch()
+            file_layout.addWidget(delete_button)
+            
+            self.view.files_layout.addLayout(file_layout)
+    
+
+    def add_uploaded_file(self, file_paths):
+        """添加上传的文件到列表"""
+        # 使用新的文件添加方法
+        self.add_files(file_paths)
         
         # 显示分析按钮
         self.view.analyze_button.setVisible(True)
@@ -156,13 +300,26 @@ class UploadController(QObject):
         # 更新上传按钮文字
         self.view.upload_button.setText("继续上传")
 
+        self.show_file_list()
+
         self.view.instruction.setText(f"可点击'继续上传'增加需要提取的文件或者点击'开始分析'提取数据")
-    
 
     def clear_file_list(self):
         """清空文件列表"""
         self.uploaded_files.clear()
-        self.view.file_list.clear()
+        # 清除现有布局中的所有控件
+        while self.view.files_layout.count():
+            child = self.view.files_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+            elif child.layout():
+                # 递归删除布局中的控件
+                sub_layout = child.layout()
+                while sub_layout.count():
+                    sub_child = sub_layout.takeAt(0)
+                    if sub_child.widget():
+                        sub_child.widget().deleteLater()
+        
         self.hide_file_list()
         
         # 隐藏分析按钮
@@ -174,7 +331,6 @@ class UploadController(QObject):
         # 重置说明文字
         self.view.instruction.setText("请上传需要审核的数据文件")
         
-
     def _on_analyze_requested(self):
         """处理分析请求"""
         if self.uploaded_files:
@@ -199,7 +355,6 @@ class UploadController(QObject):
         self.view.upload_button.setEnabled(False)
         self.view.analyze_button.setEnabled(False)
         self.view.clear_button.setEnabled(False)
-        self.view.file_list.setEnabled(False)
         # 禁用上传区域的点击事件
         self.view.upload_frame.setEnabled(False)
 
@@ -208,7 +363,6 @@ class UploadController(QObject):
         self.view.upload_button.setEnabled(True)
         self.view.analyze_button.setEnabled(True)
         self.view.clear_button.setEnabled(True)
-        self.view.file_list.setEnabled(True)
         # 启用上传区域的点击事件
         self.view.upload_frame.setEnabled(True)
 
@@ -249,7 +403,8 @@ class UploadController(QObject):
                 return False  # 表示处理失败
 
             # 文件验证通过，添加到上传列表
-            self._add_file_to_list(file_path)
+            
+            self.add_uploaded_file(file_path)
             return True  # 表示处理成功
 
         except Exception as e:

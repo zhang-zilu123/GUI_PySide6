@@ -2,7 +2,7 @@
 上传文件界面
 用户从此界面选择并上传文件
 """
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QFrame, QApplication, QFileDialog, QListWidget
+from PySide6.QtWidgets import QWidget,QScrollArea, QVBoxLayout, QLabel, QPushButton, QFrame, QApplication, QFileDialog, QListWidget
 from PySide6.QtCore import Signal, Qt
 import os
 import sys
@@ -20,9 +20,6 @@ class UploadView(QWidget):
         """初始化上传界面"""
         super().__init__()
 
-        # 设置固定的窗口大小
-        self.setFixedSize(700, 600)
-        
         # 设置界面布局和样式
         self._setup_ui()
         
@@ -93,34 +90,30 @@ class UploadView(QWidget):
 
         layout.addWidget(self.upload_frame)
 
-        # 添加文件列表显示区域（默认隐藏）
-        self.file_list = QListWidget()
-        self.file_list.setVisible(False)  # 默认隐藏
-        self.file_list.setMaximumHeight(300)
-        # 美化文件列表
-        self.file_list.setStyleSheet("""
-            QListWidget {
+
+        # 创建文件显示区域（默认隐藏）
+        self.files_widget = QWidget()
+        self.files_layout = QVBoxLayout(self.files_widget)
+        self.files_layout.setSpacing(5)
+        self.files_layout.setAlignment(Qt.AlignTop)
+        self.files_layout.setContentsMargins(0, 0, 0, 0)
+        self.files_widget.setVisible(False)
+        
+        # 创建滚动区域以容纳文件按钮
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setWidget(self.files_widget)
+        self.scroll_area.setVisible(False)
+        self.scroll_area.setMaximumHeight(200)
+        self.scroll_area.setStyleSheet("""
+            QScrollArea {
                 border: 1px solid #ddd;
                 border-radius: 5px;
                 background-color: #fff;
-                padding: 5px;
-            }
-            QListWidget::item {
-                padding: 8px;
-                border-bottom: 1px solid #eee;
-            }
-            QListWidget::item:last-child {
-                border-bottom: none;
-            }
-            QListWidget::item:hover {
-                background-color: #f5f5f5;
-            }
-            QListWidget::item:selected {
-                background-color: #e3f2fd;
-                color: #1976d2;
             }
         """)
-        layout.addWidget(self.file_list)
+        layout.addWidget(self.scroll_area)
+
 
         # 添加底部按钮区域
         button_layout = QVBoxLayout()
