@@ -18,7 +18,7 @@ class MainWindow(QMainWindow):
         
         # 设置窗口标题和初始大小
         self.setWindowTitle("数据审核工具")
-        self.setGeometry(100, 100, 1000, 700)
+        self.setGeometry(100, 100, 700, 500)
         
         # 创建堆叠窗口部件，用于管理多个界面
         self.stacked_widget = QStackedWidget()
@@ -28,6 +28,9 @@ class MainWindow(QMainWindow):
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
         self.status_bar.showMessage("就绪")
+
+        # 存储所有处理完成的文件数据
+        self.processed_files_data = []
         
         # 初始化界面和控制器
         self._init_ui()
@@ -60,21 +63,38 @@ class MainWindow(QMainWindow):
         """连接各个界面发出的信号"""
         # 上传界面信号
         self.upload_controller.file_processed.connect(self._on_file_processed)
+        self.upload_controller.processing_started.connect(self._on_processing_started)
+        self.upload_controller.processing_finished.connect(self._on_processing_finished)
         
         # 编辑界面信号
         self.edit_controller.data_saved.connect(self._on_data_saved)
-        self.edit_controller.edit_cancelled.connect(self._on_edit_cancelled)
+        
         
         # 预览界面信号
         self.preview_controller.final_upload_requested.connect(self._on_final_upload_requested)
         self.preview_controller.back_to_edit_requested.connect(self._on_back_to_edit_requested)
+
+    def _on_processing_started(self):
+        """处理开始分析事件"""
+        self.status_bar.showMessage("正在提取识别中...")
+        
+    def _on_processing_finished(self):
+        """处理分析完成事件"""
+        self.status_bar.showMessage("文件处理完成")
+        # 切换到编辑界面并传递所有数据
+        self.edit_controller.set_data(self.processed_files_data)
+        self.stacked_widget.setCurrentWidget(self.edit_view)
+        # 清空已处理的数据列表，为下一次处理做准备
+        self.processed_files_data.clear()
         
     def _on_file_processed(self, file_path, data):
-        """处理文件处理完成事件"""
+        """提取数据完成，传递数据给编辑界面"""
         self.status_bar.showMessage(f"文件处理完成: {file_path}")
-        # 切换到编辑界面并传递数据
-        self.edit_controller.set_data(data)
-        self.stacked_widget.setCurrentWidget(self.edit_view)
+        # 将处理完成的文件数据添加到列表中
+        # 添加文件名信息到数据中
+        data_with_filename = data.copy()
+        data_with_filename['_filename'] = file_path
+        self.processed_files_data.append(data_with_filename)
         
     def _on_data_saved(self, data):
         """处理数据保存事件"""
@@ -83,11 +103,6 @@ class MainWindow(QMainWindow):
         self.preview_controller.set_data(data)
         self.stacked_widget.setCurrentWidget(self.preview_view)
         
-    def _on_edit_cancelled(self):
-        """处理取消编辑事件"""
-        self.status_bar.showMessage("编辑已取消")
-        # 返回到上传界面
-        self.stacked_widget.setCurrentWidget(self.upload_view)
         
     def _on_final_upload_requested(self, data):
         """处理最终上传请求"""

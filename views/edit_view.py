@@ -4,51 +4,26 @@
 """
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
                                QPushButton, QTableWidget, QTableWidgetItem,
-                               QHeaderView, QGroupBox, QLineEdit, QApplication)
+                               QHeaderView, QApplication, QLineEdit, QAbstractItemView)
 from PySide6.QtCore import Signal, Qt
 import sys
+from config.config import EXTRA_FIELD
 
 class EditView(QWidget):
     """数据编辑界面"""
-    
-    # 定义信号：当用户请求保存数据时发出
-    save_requested = Signal(dict)  # 参数为编辑后的数据
-    
-    # 定义信号：当用户请求取消编辑时发出
-    cancel_requested = Signal()
     
     def __init__(self):
         """初始化编辑界面"""
         super().__init__()
         
+        # 存储当前数据
+        self.current_data = {}
+        
         # 设置界面布局和样式
         self._setup_ui()
-        
-        # 加载示例数据（这里需要更改，为了能展示gui界面，下面写了一个函数，后续需要更改）
-        self._load_sample_data()
 
-    def _load_sample_data(self):
-        """加载示例数据"""
-        # 设置表格的行列数
-        self.data_table.setRowCount(5)
-        self.data_table.setColumnCount(4)
-        
-        # 设置表头
-        self.data_table.setHorizontalHeaderLabels(["姓名", "年龄", "职业", "城市"])
-        
-        # 示例数据
-        sample_data = [
-            ["张三", "28", "工程师", "北京"],
-            ["李四", "32", "设计师", "上海"],
-            ["王五", "25", "产品经理", "深圳"],
-            ["赵六", "30", "教师", "广州"],
-            ["钱七", "27", "医生", "杭州"]
-        ]
-        
-        # 填充数据
-        for row, rowData in enumerate(sample_data):
-            for col, text in enumerate(rowData):
-                self.data_table.setItem(row, col, self.create_table_item(text))
+        # 设置固定的窗口大小
+        self.setFixedSize(700, 600)
         
     def _setup_ui(self):
         """设置界面UI元素"""
@@ -59,10 +34,10 @@ class EditView(QWidget):
         self.setLayout(main_layout)
         
         # 添加标题
-        title = QLabel("数据审核与编辑")
-        title.setAlignment(Qt.AlignCenter)
-        title.setStyleSheet("font-size: 20px; font-weight: bold; ")
-        main_layout.addWidget(title)
+        self.title_label = QLabel("数据审核与编辑")
+        self.title_label.setAlignment(Qt.AlignCenter)
+        self.title_label.setStyleSheet("font-size: 20px; font-weight: bold; ")
+        main_layout.addWidget(self.title_label)
         
         # 添加说明文字
         instruction = QLabel("请检查并修改识别结果，确认无误后保存")
@@ -70,10 +45,21 @@ class EditView(QWidget):
         instruction.setStyleSheet("color: #666; margin-bottom: 15px;")
         main_layout.addWidget(instruction)
         
+        # 创建文件名显示
+        self.filename_label = QLabel()
+        self.filename_label.setStyleSheet("color: #333; font-weight: bold;")
+        main_layout.addWidget(self.filename_label)
+    
         # 创建数据表格
+        self.table_label = QLabel("数据表格:")
+        self.table_label.setStyleSheet("font-weight: bold; margin-top: 10px;")
+        main_layout.addWidget(self.table_label)
+        
         self.data_table = QTableWidget()
         self.data_table.setAlternatingRowColors(True)
         self.data_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        # 默认设置为不可编辑
+        self.data_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.data_table.setStyleSheet("""
             QTableWidget {
                 gridline-color: #ddd;
@@ -85,12 +71,28 @@ class EditView(QWidget):
         """)
         main_layout.addWidget(self.data_table, 1)  # 表格占据剩余空间
         
-       
-        
         # 创建按钮区域
         button_layout = QHBoxLayout()
         button_layout.setSpacing(10)
-
+        
+        # 添加临时保存按钮
+        self.temp_save_button = QPushButton("保存")
+        self.temp_save_button.setVisible(False)  # 默认隐藏
+        self.temp_save_button.setStyleSheet("""
+            QPushButton {
+                background-color: #FF9800;
+                color: white;
+                border: none;
+                padding: 8px 16px;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #F57C00;
+            }
+        """)
+        button_layout.addWidget(self.temp_save_button)
+        
+        # 添加编辑按钮
         self.edit_button = QPushButton("编辑数据")
         self.edit_button.setStyleSheet("""
             QPushButton {
@@ -106,28 +108,12 @@ class EditView(QWidget):
         """)
         button_layout.addWidget(self.edit_button)
         
-        # 添加保存按钮
-        self.save_button = QPushButton("保存数据")
-        self.save_button.setStyleSheet("""
-            QPushButton {
-                background-color: #2196F3;
-                color: white;
-                border: none;
-                padding: 8px 16px;
-                border-radius: 4px;
-            }
-            QPushButton:hover {
-                background-color: #0b7dda;
-            }
-        """)
-        button_layout.addWidget(self.save_button)
-
         # 添加弹性空间使按钮右对齐
         button_layout.addStretch()  
         
         # 添加完成编辑按钮
-        self.cancel_button = QPushButton("完成编辑")
-        self.cancel_button.setStyleSheet("""
+        self.finish_button = QPushButton("提交")
+        self.finish_button.setStyleSheet("""
             QPushButton {
                 background-color: #f44336;
                 color: white;
@@ -139,21 +125,10 @@ class EditView(QWidget):
                 background-color: #d32f2f;
             }
         """)
-        button_layout.addWidget(self.cancel_button)
-        
-        # 添加弹性空间使按钮右对齐
-        # button_layout.addStretch()
+        button_layout.addWidget(self.finish_button)
         
         main_layout.addLayout(button_layout)
         
-    
-    def create_table_item(self, text):
-        """创建表格项"""
-        item = QTableWidgetItem(text)
-        item.setTextAlignment(Qt.AlignCenter)
-        return item
-
-
 
 if __name__ == "__main__":
     """主函数，用于启动应用程序"""
@@ -163,8 +138,6 @@ if __name__ == "__main__":
     # 创建编辑界面
     edit_view = EditView()
     edit_view.setWindowTitle("数据审核工具 - 编辑")
-    edit_view.resize(800, 600)
-    
     
     # 显示界面
     edit_view.show()

@@ -2,9 +2,8 @@
 上传文件界面
 用户从此界面选择并上传文件
 """
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QFrame, QApplication, QFileDialog
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QFrame, QApplication, QFileDialog, QListWidget
 from PySide6.QtCore import Signal, Qt
-from PySide6.QtGui import QPixmap, QDragEnterEvent, QDropEvent
 import os
 import sys
 
@@ -12,11 +11,17 @@ class UploadView(QWidget):
     """文件上传界面"""
     
     # 定义信号：当用户请求上传文件时发出
-    upload_requested = Signal(str)  # 参数为文件路径
+    upload_requested = Signal()      # 上传请求信号
+    analyze_requested = Signal()      # 分析请求信号
+    files_dropped = Signal(list)     # 拖拽文件信号
+    clear_requested = Signal()
     
     def __init__(self):
         """初始化上传界面"""
         super().__init__()
+
+        # 设置固定的窗口大小
+        self.setFixedSize(700, 600)
         
         # 设置界面布局和样式
         self._setup_ui()
@@ -30,16 +35,16 @@ class UploadView(QWidget):
         self.setLayout(layout)
         
         # 添加标题
-        title = QLabel("数据审核工具 - 文件上传")
-        title.setAlignment(Qt.AlignCenter)
-        title.setStyleSheet("font-size: 20px; font-weight: bold; margin-bottom: 30px;")
-        layout.addWidget(title)
+        self.title = QLabel("数据审核工具 - 文件上传")
+        self.title.setAlignment(Qt.AlignCenter)
+        self.title.setStyleSheet("font-size: 20px; font-weight: bold; margin-bottom: 30px;")
+        layout.addWidget(self.title)
         
         # 添加上传区域说明
-        instruction = QLabel("请上传需要审核的数据文件")
-        instruction.setAlignment(Qt.AlignCenter)
-        instruction.setStyleSheet("font-size: 16px; color: #666; margin-bottom: 20px;")
-        layout.addWidget(instruction)
+        self.instruction = QLabel("请上传需要审核的数据文件")
+        self.instruction.setAlignment(Qt.AlignCenter)
+        self.instruction.setStyleSheet("font-size: 16px; color: #666; margin-bottom: 20px;")
+        layout.addWidget(self.instruction)
         
         # 创建上传区域（带虚线边框的框架）
         self.upload_frame = QFrame()
@@ -59,7 +64,7 @@ class UploadView(QWidget):
                 border: none;
             }                     
         """)
-        self.upload_frame.setMinimumHeight(200)
+        self.upload_frame.setMinimumHeight(300)
         
         # 设置上传区域布局
         frame_layout = QVBoxLayout(self.upload_frame)
@@ -88,6 +93,35 @@ class UploadView(QWidget):
 
         layout.addWidget(self.upload_frame)
 
+        # 添加文件列表显示区域（默认隐藏）
+        self.file_list = QListWidget()
+        self.file_list.setVisible(False)  # 默认隐藏
+        self.file_list.setMaximumHeight(300)
+        # 美化文件列表
+        self.file_list.setStyleSheet("""
+            QListWidget {
+                border: 1px solid #ddd;
+                border-radius: 5px;
+                background-color: #fff;
+                padding: 5px;
+            }
+            QListWidget::item {
+                padding: 8px;
+                border-bottom: 1px solid #eee;
+            }
+            QListWidget::item:last-child {
+                border-bottom: none;
+            }
+            QListWidget::item:hover {
+                background-color: #f5f5f5;
+            }
+            QListWidget::item:selected {
+                background-color: #e3f2fd;
+                color: #1976d2;
+            }
+        """)
+        layout.addWidget(self.file_list)
+
         # 添加底部按钮区域
         button_layout = QVBoxLayout()
         button_layout.setSpacing(10)
@@ -99,9 +133,10 @@ class UploadView(QWidget):
                 background-color: #4CAF50;
                 color: white;
                 border: none;
-                padding: 10px 20px;
+                padding: 12px 24px;
                 font-size: 16px;
-                border-radius: 5px;
+                border-radius: 6px;
+                font-weight: 500;
             }
             QPushButton:hover {
                 background-color: #45a049;
@@ -113,20 +148,97 @@ class UploadView(QWidget):
 
         self.upload_button.setCursor(Qt.PointingHandCursor)
         layout.addWidget(self.upload_button)
+
+
+        # 添加分析按钮（默认隐藏）
+        self.analyze_button = QPushButton("开始分析")
+        self.analyze_button.setStyleSheet("""
+            QPushButton {
+                background-color: #2196F3;
+                color: white;
+                border: none;
+                padding: 12px 24px;
+                font-size: 16px;
+                border-radius: 6px;
+                font-weight: 500;
+            }
+            QPushButton:hover {
+                background-color: #1976D2;
+            }
+            QPushButton:pressed {
+                background-color: #0D47A1;
+            }
+        """)
+        self.analyze_button.setCursor(Qt.PointingHandCursor)
+        self.analyze_button.setVisible(False)  # 默认隐藏
+        layout.addWidget(self.analyze_button)
+
+        # 添加重新上传按钮
+        self.clear_button = QPushButton("重新上传")
+        self.clear_button.setStyleSheet("""
+            QPushButton {
+                background-color: #FF9800;
+                color: white;
+                border: none;
+                padding: 12px 24px;
+                font-size: 16px;
+                border-radius: 6px;
+                font-weight: 500;
+            }
+            QPushButton:hover {
+                background-color: #F57C00;
+            }
+            QPushButton:pressed {
+                background-color: #EF6C00;
+            }
+        """)
+        self.clear_button.setCursor(Qt.PointingHandCursor)
+        self.clear_button.setVisible(False)
+        layout.addWidget(self.clear_button)
+        
+        
+        # 连接按钮信号
+        self.upload_button.clicked.connect(self._on_upload_button_clicked)
+        self.analyze_button.clicked.connect(self._on_analyze_button_clicked)
+        self.clear_button.clicked.connect(self._on_clear_button_clicked)
         
         # 启用拖放功能
         self.setAcceptDrops(True)
         
-    def update_upload_info(self, text, is_error=False):
-        """更新上传区域显示信息"""
-        color = "#d32f2f" if is_error else "#888"
-        self.upload_info.setText(f"""
-        <div style="font-size: 48px;">📁</div>
-        <div style="font-size: 16px; color: {color};">{text}</div>
-        <div style="font-size: 12px; color: #aaa;">支持格式: pdf</div>
-        """)
-
-
+    def dragEnterEvent(self, event):
+        """处理拖拽进入事件"""
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+            
+    def dropEvent(self, event):
+        """处理拖拽放下事件"""
+        if event.mimeData().hasUrls():
+            files = []
+            for url in event.mimeData().urls():
+                file_path = url.toLocalFile()
+                if os.path.isfile(file_path):
+                    files.append(file_path)
+            if files:
+                self.files_dropped.emit(files)
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+        
+    def _on_upload_button_clicked(self):
+        """处理上传按钮点击事件"""
+        self.upload_requested.emit()
+        
+    def _on_analyze_button_clicked(self):
+        """处理分析按钮点击事件"""
+        self.analyze_requested.emit()
+    def _on_clear_button_clicked(self):
+        """处理重新上传按钮点击事件"""
+        self.clear_requested.emit()
+        
+    
+        
 
 if __name__ == "__main__":
     """主函数，用于启动应用程序"""
@@ -136,7 +248,7 @@ if __name__ == "__main__":
     # 创建上传界面
     upload_view = UploadView()
     upload_view.setWindowTitle("数据审核工具")
-    upload_view.resize(600, 500)
+    upload_view.setGeometry(100, 100, 700, 500)
        
     # 显示界面
     upload_view.show()
