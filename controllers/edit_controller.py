@@ -24,7 +24,7 @@ class EditController(QObject):
         self.view.finish_button.clicked.connect(self._on_finish_clicked)
         self.view.edit_button.clicked.connect(self._on_edit_clicked)
         self.view.temp_save_button.clicked.connect(self._on_temp_save_clicked)
-    
+
     def data_display(self, data):
         """界面中的数据展示"""
         # 如果传入的是单个字典，转换为列表
@@ -35,24 +35,67 @@ class EditController(QObject):
             data_list = data
         else:
             data_list = []
-            
+
         self.current_data = data_list.copy()  # 保存当前数据的副本
-        
+
         # 设置表格行数和列数
         self.view.data_table.setRowCount(len(data_list))
         self.view.data_table.setColumnCount(len(EXTRA_FIELD))
-        
+
         # 设置表格标题
         self.view.data_table.setHorizontalHeaderLabels(EXTRA_FIELD)
-        
+
+        # 为不同的外销合同分配颜色
+        contract_colors = self._generate_contract_colors(data_list)
+
         # 按照EXTRA_FIELD中的顺序填充表格数据
         for row, data_row in enumerate(data_list):
+            contract_value = data_row.get("外销合同", "")
+            background_color = contract_colors.get(contract_value, "#ffffff")
+
             for col, field in enumerate(EXTRA_FIELD):
                 # 字段值
                 value = str(data_row.get(field, ""))  # 获取对应值，如果不存在则为空字符串
                 value_item = QTableWidgetItem(value)
                 value_item.setFlags(value_item.flags() | Qt.ItemIsEditable)  # 设置为可编辑
+
+                # 设置背景颜色
+                from PySide6.QtGui import QColor
+                value_item.setBackground(QColor(background_color))
+
                 self.view.data_table.setItem(row, col, value_item)
+
+    def _generate_contract_colors(self, data_list):
+        """为不同的外销合同生成颜色映射"""
+        # 获取所有唯一的外销合同值
+        contracts = set()
+        for data_row in data_list:
+            contract = data_row.get("外销合同", "")
+            contracts.add(contract)
+        # 预定义的颜色列表（浅色系，便于阅读文字）
+        colors = [
+            "#E3F2FD",  # 浅蓝色
+            "#E8F5E8",  # 浅绿色
+            "#FFF3E0",  # 浅橙色
+            "#F3E5F5",  # 浅紫色
+            "#E0F2F1",  # 浅青色
+            "#FCE4EC",  # 浅粉色
+            "#F1F8E9",  # 浅黄绿色
+            "#EFEBE9",  # 浅棕色
+            "#FAFAFA",  # 浅灰色
+            "#E8EAF6",  # 浅靛蓝色
+        ]
+        # 为每个合同分配颜色
+        contract_colors = {}
+        contract_list = sorted(list(contracts))  # 排序确保一致性
+
+        for i, contract in enumerate(contract_list):
+            if contract == "":  # 空值使用白色
+                contract_colors[contract] = "#ffffff"
+            else:
+                contract_colors[contract] = colors[i % len(colors)]
+
+        return contract_colors
 
 
     def set_data(self, data):
@@ -65,11 +108,12 @@ class EditController(QObject):
         """处理完成按钮点击事件"""
         # 收集当前数据并发出保存信号
         self._collect_and_save_data()
-        
+
     def _on_edit_clicked(self):
         """处理编辑按钮点击事件"""
+        from PySide6.QtWidgets import QAbstractItemView
         # 使表格可编辑
-        self.view.data_table.setEditTriggers(self.view.data_table.DoubleClicked | self.view.data_table.EditKeyPressed)
+        self.view.data_table.setEditTriggers(QAbstractItemView.DoubleClicked | QAbstractItemView.EditKeyPressed)
         # 显示保存按钮
         self.view.temp_save_button.setVisible(True)
         # 更改编辑按钮文本
@@ -77,11 +121,12 @@ class EditController(QObject):
         # 重新连接信号以切换模式
         self.view.edit_button.clicked.disconnect()
         self.view.edit_button.clicked.connect(self._on_end_edit_clicked)
-        
+
     def _on_end_edit_clicked(self):
         """处理结束编辑按钮点击事件"""
+        from PySide6.QtWidgets import QAbstractItemView
         # 使表格不可编辑
-        self.view.data_table.setEditTriggers(self.view.data_table.NoEditTriggers)
+        self.view.data_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         # 隐藏保存按钮
         self.view.temp_save_button.setVisible(False)
         # 恢复编辑按钮文本
@@ -89,7 +134,7 @@ class EditController(QObject):
         # 重新连接信号
         self.view.edit_button.clicked.disconnect()
         self.view.edit_button.clicked.connect(self._on_edit_clicked)
-        
+
     def _on_temp_save_clicked(self):
         """处理临时保存按钮点击事件"""
         # 收集当前编辑的数据并保存
