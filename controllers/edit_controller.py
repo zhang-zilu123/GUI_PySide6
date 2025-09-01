@@ -6,19 +6,21 @@ from PySide6.QtCore import QObject, Signal, Qt
 from PySide6.QtWidgets import QTableWidgetItem
 from config.config import EXTRA_FIELD
 
+
 class EditController(QObject):
     """编辑功能控制器"""
-    
+
     # 定义信号：当数据保存完成时发出
-    data_saved = Signal(dict)  # 参数为编辑后的数据
-    
+    data_saved = Signal(list)  # 参数为编辑后的数据
+    submit_final = Signal(list)  # 参数为最终提交的数据
+
     def __init__(self, view):
         """初始化编辑控制器"""
         super().__init__()
         self.view = view
         self.data = None
         self._connect_signals()
-        
+
     def _connect_signals(self):
         """连接视图信号"""
         self.view.finish_button.clicked.connect(self._on_finish_clicked)
@@ -97,17 +99,17 @@ class EditController(QObject):
 
         return contract_colors
 
-
     def set_data(self, data):
         """设置要编辑的数据"""
         self.data = data
         # 更新编辑视图中的数据展示
         self.data_display(data)
-        
+
     def _on_finish_clicked(self):
         """处理完成按钮点击事件"""
         # 收集当前数据并发出保存信号
-        self._collect_and_save_data()
+        self._collect_current_data()
+        self.submit_final.emit(self.data)
 
     def _on_edit_clicked(self):
         """处理编辑按钮点击事件"""
@@ -137,16 +139,11 @@ class EditController(QObject):
 
     def _on_temp_save_clicked(self):
         """处理临时保存按钮点击事件"""
-        # 收集当前编辑的数据并保存
-        self._collect_and_save_data()
-        
-    def _collect_and_save_data(self):
-        """收集界面数据并保存"""
         # 收集当前界面的数据
         self._collect_current_data()
         # 发出数据保存完成信号
         self.data_saved.emit(self.data)
-        
+
     def _collect_current_data(self):
         """收集当前界面的数据"""
         # 收集表格数据
@@ -157,15 +154,14 @@ class EditController(QObject):
                 for col in range(self.view.data_table.columnCount()):
                     # 获取表头标题作为字段名称
                     field_name = self.view.data_table.horizontalHeaderItem(col).text()
-                    
+
                     # 获取字段值
                     value_item = self.view.data_table.item(row, col)
                     field_value = value_item.text() if value_item else ""
-                    
+
                     # 更新数据
                     row_data[field_name] = field_value
                 data_list.append(row_data)
-            
+
             self.data = data_list
             print(f"收集到的数据: {self.data}")
-    
