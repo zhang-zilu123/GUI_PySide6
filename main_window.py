@@ -19,7 +19,7 @@ class MainWindow(QMainWindow):
         # 设置窗口标题和初始大小
         self.setWindowTitle("数据审核工具")
         self.setGeometry(100, 100, 700, 500)
-        self.resize(700, 600) 
+        self.resize(1500, 600)
         
         # 创建堆叠窗口部件，用于管理多个界面
         self.stacked_widget = QStackedWidget()
