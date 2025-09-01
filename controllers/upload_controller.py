@@ -37,78 +37,108 @@ class ExtractDataWorker(QThread):
         os.environ['MINERU_MODEL_SOURCE'] = 'local'
         print(f'开始解析PDF文件: {file_path}')
         # 解析pdf
-        local_md_dirs = parse_doc(path_list=file_path, output_dir="./output", backend="pipeline")
-        md_path_list = []
+        # local_md_dirs = parse_doc(path_list=file_path, output_dir="./output", backend="pipeline")
+        # md_path_list = []
+        #
+        # for local_md_dir in local_md_dirs:
+        #     # 从路径中提取文件名：output和auto之间的部分
+        #     path_parts = local_md_dir.replace('\\', '/').split('/')
+        #     # 找到output和auto的位置，提取中间的文件名
+        #     output_index = path_parts.index('output')
+        #     filename = path_parts[output_index + 1]  # output后面的就是文件名
+        #
+        #     # 构建完整的md文件路径
+        #     md_path = os.path.join(local_md_dir, f"{filename}.md")
+        #     md_path_list.append(md_path)
+        #
+        # print('生成的md文件路径:', md_path_list)
+        # # 大模型解析md文件
+        # info_dict = extract_info_from_md(md_path_list)
+        # if isinstance(info_dict, str):
+        #     try:
+        #         info_dict = json.loads(info_dict)
+        #     except json.JSONDecodeError:
+        #         info_dict = {}
+        #
+        # print(f"解析md文件: {info_dict}")
+        # if os.path.exists('./output'):
+        #     shutil.rmtree('./output')
+        #     print('删除临时文件夹 ./output')
+        #
+        # # 构建返回数据
+        # display_data = []
+        #
+        # def find_value(key, data):
+        #     if key in data:
+        #         return data[key]
+        #     for value in data.values():
+        #         if isinstance(value, dict):
+        #             result = find_value(key, value)
+        #             if result is not None:
+        #                 return result
+        #         elif isinstance(value, list):
+        #             for item in value:
+        #                 if isinstance(item, dict):
+        #                     result = find_value(key, item)
+        #                     if result is not None:
+        #                         return result
+        #     return None
+        #
+        # for entry_name, details in info_dict.items():
+        #     entry_info = {field: "" for field in EXTRA_FIELD}
+        #
+        #     # Find 公司名称
+        #     company_name = find_value("公司名称", details)
+        #     entry_info["公司名称"] = company_name if company_name else ""
+        #
+        #     # Find 提单号
+        #     bill_of_lading = find_value("提单号", details)
+        #     entry_info["提单号"] = bill_of_lading if bill_of_lading else ""
+        #
+        #     # Find 货物重量
+        #     weight = find_value("重量", details)
+        #     entry_info["货物重量"] = weight if weight else ""
+        #
+        #     # Find 进仓编号
+        #     warehouse_number = find_value("订舱编号", details)
+        #     entry_info["进仓编号"] = warehouse_number if warehouse_number else ""
+        #
+        #     # Find 运编号
+        #     shipment_number = find_value("FCR 编号", details)
+        #     entry_info["运编号"] = shipment_number if shipment_number else ""
+        #
+        #     display_data.append(entry_info)
 
-        for local_md_dir in local_md_dirs:
-            # 从路径中提取文件名：output和auto之间的部分
-            path_parts = local_md_dir.replace('\\', '/').split('/')
-            # 找到output和auto的位置，提取中间的文件名
-            output_index = path_parts.index('output')
-            filename = path_parts[output_index + 1]  # output后面的就是文件名
-
-            # 构建完整的md文件路径
-            md_path = os.path.join(local_md_dir, f"{filename}.md")
-            md_path_list.append(md_path)
-
-        print('生成的md文件路径:', md_path_list)
-        # 大模型解析md文件
-        info_dict = extract_info_from_md(md_path_list)
-        if isinstance(info_dict, str):
-            try:
-                info_dict = json.loads(info_dict)
-            except json.JSONDecodeError:
-                info_dict = {}
-
-        print(f"解析md文件: {info_dict}")
-        if os.path.exists('./output'):
-            shutil.rmtree('./output')
-            print('删除临时文件夹 ./output')
-
-        # 构建返回数据
-        display_data = []
-
-        def find_value(key, data):
-            if key in data:
-                return data[key]
-            for value in data.values():
-                if isinstance(value, dict):
-                    result = find_value(key, value)
-                    if result is not None:
-                        return result
-                elif isinstance(value, list):
-                    for item in value:
-                        if isinstance(item, dict):
-                            result = find_value(key, item)
-                            if result is not None:
-                                return result
-            return None
-
-        for entry_name, details in info_dict.items():
-            entry_info = {field: "" for field in EXTRA_FIELD}
-
-            # Find 公司名称
-            company_name = find_value("公司名称", details)
-            entry_info["公司名称"] = company_name if company_name else ""
-
-            # Find 提单号
-            bill_of_lading = find_value("提单号", details)
-            entry_info["提单号"] = bill_of_lading if bill_of_lading else ""
-
-            # Find 货物重量
-            weight = find_value("重量", details)
-            entry_info["货物重量"] = weight if weight else ""
-
-            # Find 进仓编号
-            warehouse_number = find_value("订舱编号", details)
-            entry_info["进仓编号"] = warehouse_number if warehouse_number else ""
-
-            # Find 运编号
-            shipment_number = find_value("FCR 编号", details)
-            entry_info["运编号"] = shipment_number if shipment_number else ""
-
-            display_data.append(entry_info)
-
+        display_data = [
+            {
+                "公司名称": "青岛林沃供应链管理有限公司",
+                "进仓编号": "",
+                "提单号": "DJSCTAO250000746",
+                "运编号": "",
+                "货物重量": ""
+            },
+            {
+                "公司名称": "",
+                "进仓编号": "192276",
+                "提单号": "",
+                "运编号": "",
+                "货物重量": ""
+            },
+            {
+                "公司名称": "NINGBO ROYAL UNION CO LTD",
+                "进仓编号": "",
+                "提单号": "",
+                "运编号": "",
+                "货物重量": "4,529.80kg"
+            },
+            {
+                "公司名称": "Century Distribution Systems (Shenzhen) Ltd-Ningbo Branch",
+                "进仓编号": "",
+                "提单号": "",
+                "运编号": "",
+                "货物重量": ""
+            }
+        ]
         print(f"返回数据: {display_data}")
         return display_data
 
@@ -255,8 +285,6 @@ class UploadController(QObject):
             self.view.files_widget.setVisible(True)
             self.view.analyze_button.setVisible(True)
 
-        # 发出文件添加信号
-        self.view.files_dropped.emit(self.uploaded_files)
 
     def _remove_file(self, file_path):
         """删除指定文件"""
@@ -272,6 +300,16 @@ class UploadController(QObject):
                 self.view.scroll_area.setVisible(False)
                 self.view.files_widget.setVisible(False)
                 self.view.analyze_button.setVisible(False)
+                self.view.clear_button.setVisible(False)
+                self.view.upload_frame.setVisible(True)
+                self.view.upload_button.setVisible(True)
+                self.view.upload_button.setText("上传")
+                self.view.upload_info.setText("""
+                    <div style="font-size: 48px;">📁</div>
+                    <div style="font-size: 16px; color: #888;">点击或拖拽文件到此处上传</div>
+                    <div style="font-size: 12px; color: #aaa;">支持格式: pdf</div>
+                """)
+                self.view.instruction.setText("请上传需要审核的数据文件")
 
     def _rebuild_file_list(self):
         """重新构建文件列表显示"""
