@@ -5,6 +5,7 @@
 import json
 import os
 from PySide6.QtCore import QObject, Signal, Qt
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QTableWidgetItem, QMenu
 from config.config import EXTRA_FIELD
 from PySide6.QtWidgets import QMessageBox
@@ -151,10 +152,12 @@ class EditController(QObject):
         new_row = row + 1
         self.view.data_table.insertRow(new_row)
         col_count = self.view.data_table.columnCount()
+        custom_color = QColor("#FFF9C4")
 
         for col in range(col_count):
             item = QTableWidgetItem("")
             item.setFlags(item.flags() | Qt.ItemIsEditable)
+            item.setBackground(custom_color)
             self.view.data_table.setItem(new_row, col, item)
 
         self._collect_current_data()
