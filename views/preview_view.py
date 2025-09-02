@@ -24,35 +24,6 @@ class PreviewView(QWidget):
         # 设置界面布局和样式
         self._setup_ui()
         
-        # 加载示例数据（实际应用中应从编辑界面传递，需要更改）
-        self._load_sample_data()
-
-    # 仅为了可以展示界面，后续需要删除
-    def _load_sample_data(self):
-        """加载示例数据"""
-        # 设置表格的行列数
-        self.preview_table.setRowCount(5)
-        self.preview_table.setColumnCount(4)
-        
-        # 设置表头
-        self.preview_table.setHorizontalHeaderLabels(["姓名", "年龄", "职业", "城市"])
-        
-        # 示例数据
-        sample_data = [
-            ["张三", "28", "工程师", "北京"],
-            ["李四", "32", "设计师", "上海"],
-            ["王五", "25", "产品经理", "深圳"],
-            ["赵六", "30", "教师", "广州"],
-            ["钱七", "27", "医生", "杭州"]
-        ]
-        
-        # 填充数据
-        for row, rowData in enumerate(sample_data):
-            for col, text in enumerate(rowData):
-                self.preview_table.setItem(row, col, self.create_table_item(text))
-        
-        # 设置摘要信息
-        self.summary_text.setText("总记录数: 5\n包含字段: 姓名, 年龄, 职业, 城市")
         
     def _setup_ui(self):
         """设置界面UI元素"""
@@ -65,28 +36,15 @@ class PreviewView(QWidget):
         # 添加标题
         title = QLabel("数据预览与确认")
         title.setAlignment(Qt.AlignCenter)
-        title.setStyleSheet("font-size: 20px; font-weight: bold;")
+        title.setStyleSheet("font-size: 23px; font-weight: bold;")
         main_layout.addWidget(title)
         
         # 添加说明文字
-        instruction = QLabel("请确认以下数据无误后点击上传按钮")
+        instruction = QLabel("确认以下数据无误后点击上传按钮 或 点击上传文件按钮继续追加数据")
         instruction.setAlignment(Qt.AlignCenter)
-        instruction.setStyleSheet("color: #666; margin-bottom: 15px;")
+        instruction.setStyleSheet("font-size: 18px color: #666; margin-bottom: 20px;")
         main_layout.addWidget(instruction)
-        
-        # 创建数据表格（只读模式）
-        self.preview_table = QTableWidget()
-        self.preview_table.setEditTriggers(QTableWidget.NoEditTriggers)  # 设置为只读
-        self.preview_table.setAlternatingRowColors(True)
-        self.preview_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.preview_table.setStyleSheet("""
-            QTableWidget {
-                gridline-color: #ddd;
-                border: 1px solid #ccc;
-            }
-        """)
-        main_layout.addWidget(self.preview_table, 1)  # 表格占据剩余空间
-        
+
         # 创建摘要信息区域
         summary_label = QLabel("数据摘要:")
         summary_label.setStyleSheet("font-weight: bold; margin-top: 15px;")
@@ -102,6 +60,21 @@ class PreviewView(QWidget):
         """)
         self.summary_text.setReadOnly(True)
         main_layout.addWidget(self.summary_text)
+        
+        
+        # 创建数据表格（只读模式）
+        self.preview_table = QTableWidget()
+        self.preview_table.setEditTriggers(QTableWidget.NoEditTriggers)  # 设置为只读
+        self.preview_table.setAlternatingRowColors(True)
+        self.preview_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.preview_table.setStyleSheet("""
+            QTableWidget {
+                gridline-color: #ddd;
+                border: 1px solid #ccc;
+            }
+        """)
+        main_layout.addWidget(self.preview_table, 1)  # 表格占据剩余空间
+        
         
         # 创建按钮区域
         button_layout = QHBoxLayout()
@@ -119,6 +92,22 @@ class PreviewView(QWidget):
             }
             QPushButton:hover {
                 background-color: #e68a00;
+            }
+        """)
+        button_layout.addWidget(self.back_button)
+
+         # 添加增加上传文件按钮
+        self.back_button = QPushButton("继续上传文件")
+        self.back_button.setStyleSheet("""
+            QPushButton {
+                background-color: #2196F3;
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #0288D1;
             }
         """)
         button_layout.addWidget(self.back_button)
