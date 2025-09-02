@@ -4,6 +4,9 @@
 
 (待完善)
 """
+import os.path
+import shutil
+
 from PySide6.QtCore import QObject, Signal
 
 from config.config import SUBMIT_FIELD
@@ -13,7 +16,7 @@ class PreviewController(QObject):
     """预览功能控制器"""
 
     # 定义信号：当最终上传请求时发出
-    final_upload_requested = Signal(dict)  # 参数为最终数据
+    final_upload_requested = Signal(list)  # 参数为最终数据
     # 定义信号：当返回编辑请求时发出
     back_to_edit_requested = Signal()
     # 定义信号： 当继续上传请求时发出
@@ -74,5 +77,7 @@ class PreviewController(QObject):
         """处理上传按钮点击事件"""
         if not self.data:
             return
+        if os.path.exists('temp'):
+            shutil.rmtree('temp')
         # 发出最终上传信号
         self.final_upload_requested.emit(self.data)

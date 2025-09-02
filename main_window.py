@@ -1,7 +1,10 @@
 """
 主窗口类，使用QStackedWidget管理多个界面之间的切换
 """
-from PySide6.QtWidgets import QMainWindow, QStackedWidget, QStatusBar
+import json
+import os.path
+
+from PySide6.QtWidgets import QMainWindow, QStackedWidget, QStatusBar, QMessageBox
 from views.upload_view import UploadView
 from views.edit_view import EditView
 from views.preview_view import PreviewView
@@ -55,8 +58,19 @@ class MainWindow(QMainWindow):
         self.stacked_widget.addWidget(self.edit_view)
         self.stacked_widget.addWidget(self.preview_view)
 
-        # 设置当前显示的界面（默认显示上传界面）
-        self.stacked_widget.setCurrentWidget(self.upload_view)
+        temp_json_path = os.path.join("temp", "temp_data.json")
+        if os.path.exists(temp_json_path):
+            with open(temp_json_path, 'r', encoding='utf-8') as f:
+                try:
+                    data = json.load(f)
+                    if data:
+                        self.preview_controller.set_data(data)
+                        self.preview_view.upfile_button.setVisible(True)
+                        self.stacked_widget.setCurrentWidget(self.preview_view)
+                except json.JSONDecodeError:
+                    print("无法解析临时数据文件，可能已损坏。")
+                    self.stacked_widget.setCurrentWidget(self.upload_view)
+                    QMessageBox.information('提示', '无法解析临时数据文件，可能已损坏。')
 
         # 连接界面信号
         self._connect_signals()
@@ -119,6 +133,7 @@ class MainWindow(QMainWindow):
         self.status_bar.showMessage("数据已上传")
         # 这里可以添加实际的上传逻辑
         print(f"最终上传数据: {data}")
+        self.stacked_widget.setCurrentWidget(self.upload_view)
 
     def _on_back_to_edit_requested(self):
         """处理返回编辑请求"""

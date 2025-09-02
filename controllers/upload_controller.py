@@ -442,7 +442,6 @@ class ExtractDataWorker(QThread):
                 entry_info["备注"] = entry_detail.get("备注", "")
                 display_data.append(entry_info)
 
-            # 🔹 为合同号顺序分配文件路径
         file_index = 0
         contract_to_file = {}
 
@@ -456,6 +455,20 @@ class ExtractDataWorker(QThread):
                     contract_to_file[contract_no] = ""  # 文件不够用，给空
             # 如果只要文件名：os.path.basename(contract_to_file[contract_no])
             entry["源文件"] = contract_to_file[contract_no]
+
+        temp_json_path = os.path.join("temp", "temp_data.json")
+        if os.path.exists(temp_json_path):
+            with open(temp_json_path, 'r', encoding='utf-8') as f:
+                try:
+                    data = json.load(f)
+                    if data:
+                        if isinstance(data, list):
+                            display_data.extend(data)
+                        elif isinstance(data, dict):
+                            display_data.append(data)
+                except Exception as e:
+                    display_data = display_data
+                    print(f"读取 temp_data.json 失败: {e}")
 
         print(f"返回数据: {display_data}")
         return display_data
