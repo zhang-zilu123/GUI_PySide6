@@ -89,10 +89,11 @@ class MainWindow(QMainWindow):
         # 清空已处理的数据列表，为下一次处理做准备
         self.processed_files_data.clear()
 
-    def _on_file_processed(self, file_path, data):
+    def _on_file_processed(self, data, filename):
         """提取数据完成，传递数据给编辑界面"""
-        self.status_bar.showMessage(f"文件处理完成: {file_path}")
+        self.status_bar.showMessage("文件处理完成")
         print('处理完成的文件:', data)
+        self.edit_controller.update_filename(filename)
         # 直接保存原始数据，不修改结构
         if isinstance(data, list):
             self.processed_files_data.extend(data)
