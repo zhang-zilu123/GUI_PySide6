@@ -97,8 +97,8 @@ class PreviewView(QWidget):
         button_layout.addWidget(self.back_button)
 
          # 添加增加上传文件按钮
-        self.back_button = QPushButton("继续上传文件")
-        self.back_button.setStyleSheet("""
+        self.upfile_button = QPushButton("继续上传文件")
+        self.upfile_button.setStyleSheet("""
             QPushButton {
                 background-color: #2196F3;
                 color: white;
@@ -110,7 +110,7 @@ class PreviewView(QWidget):
                 background-color: #0288D1;
             }
         """)
-        button_layout.addWidget(self.back_button)
+        button_layout.addWidget(self.upfile_button)
         
         # 添加弹性空间使上传按钮右对齐
         button_layout.addStretch()
