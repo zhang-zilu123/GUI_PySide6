@@ -3,7 +3,7 @@
 处理数据编辑相关的业务逻辑
 """
 from PySide6.QtCore import QObject, Signal, Qt
-from PySide6.QtWidgets import QTableWidgetItem
+from PySide6.QtWidgets import QTableWidgetItem, QMenu
 from config.config import EXTRA_FIELD
 
 
@@ -18,6 +18,7 @@ class EditController(QObject):
         """初始化编辑控制器"""
         super().__init__()
         self.view = view
+        self.view._controller = self
         self.data = None
         self._connect_signals()
 
@@ -26,6 +27,7 @@ class EditController(QObject):
         self.view.finish_button.clicked.connect(self._on_finish_clicked)
         self.view.edit_button.clicked.connect(self._on_edit_clicked)
         self.view.temp_save_button.clicked.connect(self._on_temp_save_clicked)
+        self.view.data_table.customContextMenuRequested.connect(self._on_context_menu_requested)
 
     def data_display(self, data):
         """界面中的数据展示"""
@@ -98,6 +100,36 @@ class EditController(QObject):
                 contract_colors[contract] = colors[i % len(colors)]
 
         return contract_colors
+
+    def _on_context_menu_requested(self, pos):
+        """处理右键菜单请求"""
+        item = self.view.data_table.itemAt(pos)
+        if item:
+            row = item.row()
+            menu = QMenu(self.view)
+            delete_action = menu.addAction("删除此行")
+            add_action = menu.addAction("在下方增加一行")
+            delete_action.triggered.connect(lambda: self.delete_row(row))
+            add_action.triggered.connect(lambda: self.add_row(row))
+            menu.exec(self.view.data_table.mapToGlobal(pos))
+
+    def delete_row(self, row):
+        """删除指定行"""
+        self.view.data_table.removeRow(row)
+        self._collect_current_data()
+
+    def add_row(self, row):
+        """在指定行下方增加一行"""
+        new_row = row + 1
+        self.view.data_table.insertRow(new_row)
+        col_count = self.view.data_table.columnCount()
+
+        for col in range(col_count):
+            item = QTableWidgetItem("")
+            item.setFlags(item.flags() | Qt.ItemIsEditable)
+            self.view.data_table.setItem(new_row, col, item)
+
+        self._collect_current_data()
 
     def set_data(self, data):
         """设置要编辑的数据"""

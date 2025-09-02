@@ -73,8 +73,7 @@ class EditView(QWidget):
 
         # --- 设置表格右键菜单策略 ---
         self.data_table.setContextMenuPolicy(Qt.CustomContextMenu)
-        self.data_table.customContextMenuRequested.connect(self.show_context_menu)
-        
+
         # 创建按钮区域
         button_layout = QHBoxLayout()
         button_layout.setSpacing(10)
@@ -132,17 +131,6 @@ class EditView(QWidget):
         button_layout.addWidget(self.finish_button)
         
         main_layout.addLayout(button_layout)
-
-    # --- 右键菜单方法 ---
-    def show_context_menu(self, pos):
-        """在右键点击时弹出菜单(仅显示菜单，不做功能实现)"""
-        item = self.data_table.itemAt(pos)
-        if item:  # 点击到某行
-            menu = QMenu(self)
-            menu.addAction("删除此行")  # 仅展示菜单项
-            menu.addAction("在下方增加一行")
-            menu.exec(self.data_table.mapToGlobal(pos))
-        
 
 if __name__ == "__main__":
     """主函数，用于启动应用程序"""
