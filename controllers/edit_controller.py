@@ -2,6 +2,7 @@
 编辑功能控制器
 处理数据编辑相关的业务逻辑
 """
+import os
 from PySide6.QtCore import QObject, Signal, Qt
 from PySide6.QtWidgets import QTableWidgetItem, QMenu
 from config.config import EXTRA_FIELD
@@ -28,6 +29,7 @@ class EditController(QObject):
         self.view.edit_button.clicked.connect(self._on_edit_clicked)
         self.view.temp_save_button.clicked.connect(self._on_temp_save_clicked)
         self.view.data_table.customContextMenuRequested.connect(self._on_context_menu_requested)
+        self.view.data_table.cellClicked.connect(self._on_cell_clicked)
 
     def update_filename(self, filename_str):
         """更新文件名显示"""
@@ -104,6 +106,26 @@ class EditController(QObject):
                 contract_colors[contract] = colors[i % len(colors)]
 
         return contract_colors
+
+    def _on_cell_clicked(self, row, column):
+        """处理单元格点击事件"""
+        # 获取列标题
+        header_item = self.view.data_table.horizontalHeaderItem(column)
+        if header_item:
+            column_name = header_item.text()
+
+            # 检查是否点击了"源文件"列
+            if column_name == "源文件":
+                print(f"点击了源文件列，行: {row}, 列: {column}")
+                # 获取该行的源文件值
+                item = self.view.data_table.item(row, column)
+                if item:
+                    source_file = item.text()
+                    print(f"源文件: {source_file}")
+                    if os.path.exists(source_file):
+                        os.startfile(source_file)
+                    else:
+                        print(f"文件不存在: {source_file}")
 
     def _on_context_menu_requested(self, pos):
         """处理右键菜单请求"""

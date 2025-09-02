@@ -52,7 +52,7 @@ def extract_info_from_md(md_file_paths: list) -> dict:
                 你是一个顶级的数据结构化专家，专门从非结构化的 Markdown 文本中精准提取关键信息，并转换为结构化 JSON 格式。
 
                 # 任务
-                请从提供的费用单 Markdown 内容中，识别并提取以下 6 个字段：
+                请从提供的费用单 多个Markdown 内容中，识别并提取以下 6 个字段：
                 - `外销合同`
                 - `船代公司`
                 - `费用名称`
