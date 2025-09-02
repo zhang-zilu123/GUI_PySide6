@@ -75,6 +75,7 @@ class MainWindow(QMainWindow):
         # 预览界面信号
         self.preview_controller.final_upload_requested.connect(self._on_final_upload_requested)
         self.preview_controller.back_to_edit_requested.connect(self._on_back_to_edit_requested)
+        self.preview_controller.continue_upload_requested.connect(self._on_continue_upload_requested)
 
     def _on_processing_started(self):
         """处理开始分析事件"""
@@ -110,6 +111,7 @@ class MainWindow(QMainWindow):
         """处理最终提交事件"""
         self.status_bar.showMessage("准备上传数据")
         print("最终提交的数据:", data)
+        self.preview_controller.set_data(data)
         self.stacked_widget.setCurrentWidget(self.preview_view)
 
     def _on_final_upload_requested(self, data):
@@ -123,3 +125,9 @@ class MainWindow(QMainWindow):
         self.status_bar.showMessage("返回编辑")
         # 返回到编辑界面
         self.stacked_widget.setCurrentWidget(self.edit_view)
+
+    def _on_continue_upload_requested(self):
+        """处理继续上传请求"""
+        self.status_bar.showMessage("继续上传文件")
+        # 返回到上传界面
+        self.stacked_widget.setCurrentWidget(self.upload_view)
