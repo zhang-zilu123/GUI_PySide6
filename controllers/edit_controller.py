@@ -5,8 +5,8 @@
 import json
 import os
 from PySide6.QtCore import QObject, Signal, Qt
-from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QTableWidgetItem, QMenu
+from PySide6.QtGui import QColor, QFont, QCursor
+from PySide6.QtWidgets import QTableWidgetItem, QMenu, QToolTip, QAbstractItemView
 from config.config import EXTRA_FIELD
 from PySide6.QtWidgets import QMessageBox
 
@@ -54,9 +54,10 @@ class EditController(QObject):
         # 设置表格行数和列数
         self.view.data_table.setRowCount(len(data_list))
         self.view.data_table.setColumnCount(len(EXTRA_FIELD))
-
         # 设置表格标题
         self.view.data_table.setHorizontalHeaderLabels(EXTRA_FIELD)
+        # 使表格可编辑
+        self.view.data_table.setEditTriggers(QAbstractItemView.DoubleClicked | QAbstractItemView.EditKeyPressed)
 
         # 为不同的外销合同分配颜色
         contract_colors = self._generate_contract_colors(data_list)
@@ -73,8 +74,12 @@ class EditController(QObject):
                 value_item.setFlags(value_item.flags() | Qt.ItemIsEditable)  # 设置为可编辑
 
                 # 设置背景颜色
-                from PySide6.QtGui import QColor
                 value_item.setBackground(QColor(background_color))
+                if field == "源文件":
+                    font = QFont()
+                    font.setUnderline(True)
+                    value_item.setFont(font)
+                    value_item.setForeground(Qt.blue)
 
                 self.view.data_table.setItem(row, col, value_item)
 
