@@ -2,10 +2,12 @@
 编辑功能控制器
 处理数据编辑相关的业务逻辑
 """
+import json
 import os
 from PySide6.QtCore import QObject, Signal, Qt
 from PySide6.QtWidgets import QTableWidgetItem, QMenu
 from config.config import EXTRA_FIELD
+from PySide6.QtWidgets import QMessageBox
 
 
 class EditController(QObject):
@@ -26,7 +28,7 @@ class EditController(QObject):
     def _connect_signals(self):
         """连接视图信号"""
         self.view.finish_button.clicked.connect(self._on_finish_clicked)
-        self.view.edit_button.clicked.connect(self._on_edit_clicked)
+        # self.view.edit_button.clicked.connect(self._on_edit_clicked)
         self.view.temp_save_button.clicked.connect(self._on_temp_save_clicked)
         self.view.data_table.customContextMenuRequested.connect(self._on_context_menu_requested)
         self.view.data_table.cellClicked.connect(self._on_cell_clicked)
@@ -199,6 +201,13 @@ class EditController(QObject):
         """处理临时保存按钮点击事件"""
         # 收集当前界面的数据
         self._collect_current_data()
+        temp_dir = 'temp'
+        if not os.path.exists(temp_dir):
+            os.makedirs(temp_dir)
+        temp_path = os.path.join(temp_dir, 'temp_data.json')
+        with open(temp_path, 'w', encoding='utf-8') as f:
+            json.dump(self.data, f, ensure_ascii=False, indent=2)
+        QMessageBox.information(self.view, '提示', '数据已保存')
         # 发出数据保存完成信号
         self.data_saved.emit(self.data)
 

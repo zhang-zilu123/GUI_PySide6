@@ -79,7 +79,7 @@ class EditView(QWidget):
 
         # 添加临时保存按钮
         self.temp_save_button = QPushButton("保存")
-        self.temp_save_button.setVisible(False)  # 默认隐藏
+        self.temp_save_button.setVisible(True)  # 默认隐藏
         self.temp_save_button.setStyleSheet("""
             QPushButton {
                 background-color: #FF9800;
@@ -95,20 +95,20 @@ class EditView(QWidget):
         button_layout.addWidget(self.temp_save_button)
 
         # 添加编辑按钮
-        self.edit_button = QPushButton("编辑数据")
-        self.edit_button.setStyleSheet("""
-            QPushButton {
-                background-color: #00C957;
-                color: white;
-                border: none;
-                padding: 8px 16px;
-                border-radius: 4px;
-            }
-            QPushButton:hover {
-                background-color: #00A85A;
-            }
-        """)
-        button_layout.addWidget(self.edit_button)
+        # self.edit_button = QPushButton("编辑数据")
+        # self.edit_button.setStyleSheet("""
+        #     QPushButton {
+        #         background-color: #00C957;
+        #         color: white;
+        #         border: none;
+        #         padding: 8px 16px;
+        #         border-radius: 4px;
+        #     }
+        #     QPushButton:hover {
+        #         background-color: #00A85A;
+        #     }
+        # """)
+        # button_layout.addWidget(self.edit_button)
 
         # 添加弹性空间使按钮右对齐
         button_layout.addStretch()
