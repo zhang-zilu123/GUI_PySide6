@@ -29,6 +29,10 @@ class EditController(QObject):
         self.view.temp_save_button.clicked.connect(self._on_temp_save_clicked)
         self.view.data_table.customContextMenuRequested.connect(self._on_context_menu_requested)
 
+    def update_filename(self, filename_str):
+        """更新文件名显示"""
+        self.view.filename_label.setText(f"文件名: {filename_str}")
+
     def data_display(self, data):
         """界面中的数据展示"""
         # 如果传入的是单个字典，转换为列表
