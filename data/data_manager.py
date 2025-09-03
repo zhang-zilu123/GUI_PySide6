@@ -4,6 +4,7 @@ class DataManager:
     def __init__(self):
         self.current_data = []
         self.file_name = ""
+        self.uploaded_file_name = ""
         self.upload_history = []
 
     def set_current_data(self, data):
@@ -13,3 +14,10 @@ class DataManager:
     def set_file_name(self, file_name):
         """设置当前处理的文件名"""
         self.file_name = file_name
+
+    def set_uploaded_file_name(self, uploaded_file_name):
+        """设置已上传的文件名"""
+        if self.uploaded_file_name:
+            self.uploaded_file_name = uploaded_file_name + ', ' + self.uploaded_file_name
+        else:
+            self.uploaded_file_name = uploaded_file_name

@@ -6,6 +6,7 @@ import os.path
 
 from PySide6.QtWidgets import QMainWindow, QStatusBar, QMessageBox, QTabWidget
 
+from controllers.history_controller import HistoryController
 from data.data_manager import DataManager
 from views.upload_view import UploadView
 from views.edit_view import EditView
@@ -88,7 +89,7 @@ class MainWindow(QMainWindow):
         self.upload_controller = UploadController(self.upload_view, self.data_manager)
         self.edit_controller = EditController(self.edit_view, self.data_manager)
         self.preview_controller = PreviewController(self.preview_view, self.data_manager)
-        # self.history_controller = HistoryController(self.history_view, self.data_manager)
+        self.history_controller = HistoryController(self.history_view, self.data_manager)
 
         # 将界面添加到标签页中
         self.tab_widget.addTab(self.upload_view, "上传文件")
@@ -145,6 +146,9 @@ class MainWindow(QMainWindow):
         """处理标签页切换事件"""
         tab_text = self.tab_widget.tabText(index)
         self.status_bar.showMessage(f"当前页面: {tab_text}")
+        # 如果切换到历史记录页面，刷新数据
+        if tab_text == "查看历史上传":
+            self.history_controller.refresh_history()
 
     def _on_processing_started(self):
         """处理开始分析事件"""
@@ -182,11 +186,20 @@ class MainWindow(QMainWindow):
         self.preview_controller.set_data(data)
         self.tab_widget.setCurrentWidget(self.preview_view)
 
-    def _on_final_upload_requested(self, data):
+    def _on_final_upload_requested(self):
         """处理最终上传请求"""
         self.status_bar.showMessage("数据已上传")
-        # 这里可以添加实际的上传逻辑
+        data = self.data_manager.current_data
+        filename = self.data_manager.file_name
+        self.data_manager.set_uploaded_file_name(filename)
         print(f"最终上传数据: {data}")
+        # 刷新历史记录
+        self.history_controller.refresh_history()
+        self.data_manager.set_current_data([])
+        self.data_manager.set_file_name("")
+        self.edit_controller.set_data([])
+        self.edit_controller.update_filename("暂无文件")
+        self.preview_controller.set_data([])
         self.tab_widget.setCurrentWidget(self.upload_view)
 
     def _on_back_to_edit_requested(self):

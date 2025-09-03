@@ -520,7 +520,7 @@ class UploadController(QObject):
         if file_paths:
             valid_files = []
             for file_path in file_paths:
-                if self._validate_file(file_path):  # 验证文件格式
+                if self._process_file(file_path):  # 验证文件格式
                     valid_files.append(file_path)
             if valid_files:
                 self.add_uploaded_file(valid_files)
@@ -810,8 +810,14 @@ class UploadController(QObject):
                 QMessageBox.warning(self.view, "文件格式错误", f"{file_path}不是规定的文件格式，请上传PDF文件")
                 return False  # 表示处理失败
 
-            # 文件验证通过，添加到上传列表
+            # 获取文件名并检查是否已上传过
+            file_name = os.path.basename(file_path)
+            print('hdfasoi', file_name)
+            if self.data_manager.uploaded_file_name and file_name in self.data_manager.uploaded_file_name:
+                QMessageBox.warning(self.view, "文件重复", f"文件 {file_name} 已经上传过了")
+                return False
 
+            # 文件验证通过，添加到上传列表
             self.add_uploaded_file(file_path)
             return True  # 表示处理成功
 

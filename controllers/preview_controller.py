@@ -8,6 +8,7 @@ import shutil
 from PySide6.QtCore import QObject, Signal
 
 from config.config import SUBMIT_FIELD
+from data.history_manager import HistoryManager
 
 
 class PreviewController(QObject):
@@ -26,6 +27,7 @@ class PreviewController(QObject):
         self.view = view
         self.data_manager = data_manager
         self.data = None
+        self.history_manager = HistoryManager()
         self._connect_signals()
 
     def _connect_signals(self):
@@ -42,9 +44,6 @@ class PreviewController(QObject):
 
     def _load_data_to_table(self):
         """加载数据到表格"""
-        if not self.data:
-            return
-
         data_list = self.data
 
         # 设置表格行列数
@@ -78,6 +77,15 @@ class PreviewController(QObject):
             return
         if os.path.exists('temp'):
             shutil.rmtree('temp')
+        
+        try:
+            record_path = self.history_manager.save_upload_record(
+                file_name=self.data_manager.file_name,
+                data=self.data,
+            )
+            print(f"上传记录已保存: {record_path}")
+        except Exception as e:
+            print(f"保存上传记录失败: {e}")
         # 发出最终上传信号
         self.data_manager.set_current_data(self.data)
         self.final_upload_requested.emit()
