@@ -133,6 +133,9 @@ class MainWindow(QMainWindow):
         self.status_bar.showMessage("数据已上传")
         # 这里可以添加实际的上传逻辑
         print(f"最终上传数据: {data}")
+        self.upload_controller.uploaded_files = []
+        self.upload_controller.clear_file_list()
+        self.upload_view.title.setText("数据审核工具 - 文件上传")
         self.stacked_widget.setCurrentWidget(self.upload_view)
 
     def _on_back_to_edit_requested(self):
@@ -146,3 +149,16 @@ class MainWindow(QMainWindow):
         self.status_bar.showMessage("继续上传文件")
         # 返回到上传界面
         self.stacked_widget.setCurrentWidget(self.upload_view)
+
+    def closeEvent(self, event):
+        reply = QMessageBox.question(
+            self,
+            "退出确认",
+            "确定要退出吗？",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        if reply == QMessageBox.Yes:
+            event.accept()
+        else:
+            event.ignore()
