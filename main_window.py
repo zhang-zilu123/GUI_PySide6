@@ -102,18 +102,17 @@ class MainWindow(QMainWindow):
                 try:
                     data = json.load(f)
                     if data:
-                        self.data_manager.set_current_data(data)
-                        self.preview_controller.set_data(data)
-                        self.preview_view.upfile_button.setVisible(True)
-                        self.edit_controller.set_data(data)
-                        self.tab_widget.setCurrentWidget(self.preview_view)
-
                         source_files = [item.get("源文件", "") for item in data if item.get("源文件")]
                         unique_source_files = list(set(source_files))
                         filename = [os.path.basename(filepath) for filepath in unique_source_files]
                         filename_str = ", ".join(filename)
                         self.data_manager.set_file_name(filename_str)
                         self.edit_controller.update_filename(filename_str)
+                        self.data_manager.set_current_data(data)
+                        self.preview_controller.set_data(data)
+                        self.preview_view.upfile_button.setVisible(True)
+                        self.edit_controller.set_data(data)
+                        self.tab_widget.setCurrentWidget(self.preview_view)
 
                 except json.JSONDecodeError:
                     print("无法解析临时数据文件，可能已损坏。")

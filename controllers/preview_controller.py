@@ -1,8 +1,6 @@
 """
 预览功能控制器
 处理数据预览相关的业务逻辑
-
-(待完善)
 """
 import os.path
 import shutil
@@ -71,7 +69,7 @@ class PreviewController(QObject):
             return
 
         data_count = len(self.data)
-        summary_text = f"记录数: {data_count}\n状态: 已审核\n准备上传"
+        summary_text = f"记录数: {data_count}\n文件名:{self.data_manager.file_name} \n状态: 已审核\n准备上传"
         self.view.summary_text.setPlainText(summary_text)
 
     def _on_upload_clicked(self):
