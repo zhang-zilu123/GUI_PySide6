@@ -18,7 +18,7 @@ class PreviewController(QObject):
     # 定义信号：当最终上传请求时发出
     final_upload_requested = Signal(list)  # 参数为最终数据
     # 定义信号：当返回编辑请求时发出
-    back_to_edit_requested = Signal()
+    back_to_edit_requested = Signal(list)
     # 定义信号： 当继续上传请求时发出
     continue_upload_requested = Signal()
 
@@ -31,7 +31,7 @@ class PreviewController(QObject):
 
     def _connect_signals(self):
         """连接视图信号"""
-        self.view.back_button.clicked.connect(lambda: self.back_to_edit_requested.emit())
+        self.view.back_button.clicked.connect(lambda: self.back_to_edit_requested.emit(self.data if self.data else []))
         self.view.upfile_button.clicked.connect(lambda: self.continue_upload_requested.emit())
         self.view.upload_button.clicked.connect(self._on_upload_clicked)
 

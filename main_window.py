@@ -138,9 +138,10 @@ class MainWindow(QMainWindow):
         self.upload_view.title.setText("数据审核工具 - 文件上传")
         self.stacked_widget.setCurrentWidget(self.upload_view)
 
-    def _on_back_to_edit_requested(self):
+    def _on_back_to_edit_requested(self, data):
         """处理返回编辑请求"""
         self.status_bar.showMessage("返回编辑")
+        self.edit_controller.set_data(data)
         # 返回到编辑界面
         self.stacked_widget.setCurrentWidget(self.edit_view)
 
