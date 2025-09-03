@@ -42,7 +42,7 @@ class PreviewView(QWidget):
         # 添加说明文字
         instruction = QLabel("确认以下数据无误后点击上传按钮 或 点击上传文件按钮继续追加数据")
         instruction.setAlignment(Qt.AlignCenter)
-        instruction.setStyleSheet("font-size: 18px color: #666; margin-bottom: 20px;")
+        instruction.setStyleSheet("font-size: 18px; color: #666; margin-bottom: 20px;")
         main_layout.addWidget(instruction)
 
         # 创建摘要信息区域

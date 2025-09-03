@@ -4,10 +4,11 @@
 import json
 import os.path
 
-from PySide6.QtWidgets import QMainWindow, QStackedWidget, QStatusBar, QMessageBox
+from PySide6.QtWidgets import QMainWindow, QStackedWidget, QStatusBar, QMessageBox,QTabWidget
 from views.upload_view import UploadView
 from views.edit_view import EditView
 from views.preview_view import PreviewView
+from views.history_view import HistoryView
 from controllers.upload_controller import UploadController
 from controllers.edit_controller import EditController
 from controllers.preview_controller import PreviewController
@@ -25,9 +26,35 @@ class MainWindow(QMainWindow):
         self.setGeometry(100, 100, 700, 500)
         self.resize(1500, 600)
 
-        # 创建堆叠窗口部件，用于管理多个界面
-        self.stacked_widget = QStackedWidget()
-        self.setCentralWidget(self.stacked_widget)
+        # 创建标签页部件，用于管理多个界面
+        self.tab_widget = QTabWidget()
+        self.tab_widget.setTabsClosable(False)  # 禁止关闭标签页
+        self.setCentralWidget(self.tab_widget)
+
+        # 设置标签页样式
+        self.tab_widget.setStyleSheet("""
+            QTabWidget::pane {
+                border: none;
+            }
+            QTabBar::tab {
+                background-color: #f5f5f5;
+                padding: 12px 25px;
+                border: 1px solid #ddd;
+                border-bottom: none;
+                border-top-left-radius: 5px;
+                border-top-right-radius: 5px;
+                font-weight: 500;
+                font-size: 14px;
+            }
+            QTabBar::tab:selected {
+                background-color: white;
+                border-bottom: 2px solid #4CAF50;
+                font-weight: bold;
+            }
+            QTabBar::tab:hover {
+                background-color: #e8f5e8;
+            }
+        """)
 
         # 创建状态栏
         self.status_bar = QStatusBar()
@@ -43,20 +70,27 @@ class MainWindow(QMainWindow):
     def _init_ui(self):
         """初始化所有界面并添加到堆叠窗口中"""
 
-        # 创建三个主要界面
+        # 创建四个主要界面
         self.upload_view = UploadView()
         self.edit_view = EditView()
         self.preview_view = PreviewView()
+        self.history_view = HistoryView()
 
         # 创建对应的控制器
         self.upload_controller = UploadController(self.upload_view)
         self.edit_controller = EditController(self.edit_view)
         self.preview_controller = PreviewController(self.preview_view)
 
-        # 将界面添加到堆叠窗口中
-        self.stacked_widget.addWidget(self.upload_view)
-        self.stacked_widget.addWidget(self.edit_view)
-        self.stacked_widget.addWidget(self.preview_view)
+        # 将界面添加到标签页中
+        self.tab_widget.addTab(self.upload_view, "上传文件")
+        self.tab_widget.addTab(self.edit_view, "编辑数据")
+        self.tab_widget.addTab(self.preview_view, "预览上传")
+        self.tab_widget.addTab(self.history_view, "查看历史上传")
+
+        # # 将界面添加到堆叠窗口中
+        # self.stacked_widget.addWidget(self.upload_view)
+        # self.stacked_widget.addWidget(self.edit_view)
+        # self.stacked_widget.addWidget(self.preview_view)
 
         temp_json_path = os.path.join("temp", "temp_data.json")
         if os.path.exists(temp_json_path):
@@ -66,10 +100,12 @@ class MainWindow(QMainWindow):
                     if data:
                         self.preview_controller.set_data(data)
                         self.preview_view.upfile_button.setVisible(True)
-                        self.stacked_widget.setCurrentWidget(self.preview_view)
+                        self.tab_widget.setCurrentWidget(self.preview_view)
+                        # self.stacked_widget.setCurrentWidget(self.preview_view)
                 except json.JSONDecodeError:
                     print("无法解析临时数据文件，可能已损坏。")
-                    self.stacked_widget.setCurrentWidget(self.upload_view)
+                    self.tab_widget.setCurrentWidget(self.upload_view)
+                    # self.stacked_widget.setCurrentWidget(self.upload_view)
                     QMessageBox.information('提示', '无法解析临时数据文件，可能已损坏。')
 
         # 连接界面信号
@@ -91,6 +127,15 @@ class MainWindow(QMainWindow):
         self.preview_controller.back_to_edit_requested.connect(self._on_back_to_edit_requested)
         self.preview_controller.continue_upload_requested.connect(self._on_continue_upload_requested)
 
+
+         # 标签页切换信号
+        self.tab_widget.currentChanged.connect(self._on_tab_changed)
+
+    def _on_tab_changed(self, index):
+        """处理标签页切换事件"""
+        tab_text = self.tab_widget.tabText(index)
+        self.status_bar.showMessage(f"当前页面: {tab_text}")
+
     def _on_processing_started(self):
         """处理开始分析事件"""
         self.status_bar.showMessage("正在提取识别中...")
@@ -100,7 +145,8 @@ class MainWindow(QMainWindow):
         self.status_bar.showMessage("文件处理完成")
         # 切换到编辑界面并传递所有数据
         self.edit_controller.set_data(self.processed_files_data)
-        self.stacked_widget.setCurrentWidget(self.edit_view)
+        self.tab_widget.setCurrentWidget(self.edit_view)
+        # self.stacked_widget.setCurrentWidget(self.edit_view)
         # 清空已处理的数据列表，为下一次处理做准备
         self.processed_files_data.clear()
 
@@ -126,23 +172,27 @@ class MainWindow(QMainWindow):
         self.status_bar.showMessage("准备上传数据")
         print("最终提交的数据:", data)
         self.preview_controller.set_data(data)
-        self.stacked_widget.setCurrentWidget(self.preview_view)
+        # self.stacked_widget.setCurrentWidget(self.preview_view)
+        self.tab_widget.setCurrentWidget(self.preview_view)
 
     def _on_final_upload_requested(self, data):
         """处理最终上传请求"""
         self.status_bar.showMessage("数据已上传")
         # 这里可以添加实际的上传逻辑
         print(f"最终上传数据: {data}")
-        self.stacked_widget.setCurrentWidget(self.upload_view)
+        # self.stacked_widget.setCurrentWidget(self.upload_view)
+        self.tab_widget.setCurrentWidget(self.upload_view)
 
     def _on_back_to_edit_requested(self):
         """处理返回编辑请求"""
         self.status_bar.showMessage("返回编辑")
         # 返回到编辑界面
-        self.stacked_widget.setCurrentWidget(self.edit_view)
+        # self.stacked_widget.setCurrentWidget(self.edit_view)
+        self.tab_widget.setCurrentWidget(self.edit_view)
 
     def _on_continue_upload_requested(self):
         """处理继续上传请求"""
         self.status_bar.showMessage("继续上传文件")
         # 返回到上传界面
-        self.stacked_widget.setCurrentWidget(self.upload_view)
+        # self.stacked_widget.setCurrentWidget(self.upload_view)
+        self.tab_widget.setCurrentWidget(self.upload_view)
