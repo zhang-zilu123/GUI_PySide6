@@ -15,13 +15,14 @@ class EditController(QObject):
     """编辑功能控制器"""
 
     # 定义信号：当数据保存完成时发出
-    data_saved = Signal(list)  # 参数为编辑后的数据
-    submit_final = Signal(list)  # 参数为最终提交的数据
+    data_saved = Signal()  # 参数为编辑后的数据
+    submit_final = Signal()
 
-    def __init__(self, view):
+    def __init__(self, view, data_manager):
         """初始化编辑控制器"""
         super().__init__()
         self.view = view
+        self.data_manager = data_manager
         self.view._controller = self
         self.data = None
         self._connect_signals()
@@ -29,7 +30,6 @@ class EditController(QObject):
     def _connect_signals(self):
         """连接视图信号"""
         self.view.finish_button.clicked.connect(self._on_finish_clicked)
-        # self.view.edit_button.clicked.connect(self._on_edit_clicked)
         self.view.temp_save_button.clicked.connect(self._on_temp_save_clicked)
         self.view.data_table.customContextMenuRequested.connect(self._on_context_menu_requested)
         self.view.data_table.cellClicked.connect(self._on_cell_clicked)
@@ -40,15 +40,7 @@ class EditController(QObject):
 
     def data_display(self, data):
         """界面中的数据展示"""
-        # 如果传入的是单个字典，转换为列表
-        if isinstance(data, dict):
-            data_list = [data]
-        # 如果传入的是字典列表
-        elif isinstance(data, list):
-            data_list = data
-        else:
-            data_list = []
-
+        data_list = self.data_manager.current_data
         self.current_data = data_list.copy()  # 保存当前数据的副本
 
         # 设置表格行数和列数
@@ -177,7 +169,8 @@ class EditController(QObject):
         """处理完成按钮点击事件"""
         # 收集当前数据并发出保存信号
         self._collect_current_data()
-        self.submit_final.emit(self.data)
+        self.data_manager.set_current_data(self.data)
+        self.submit_final.emit()
 
     def _on_edit_clicked(self):
         """处理编辑按钮点击事件"""
@@ -217,7 +210,8 @@ class EditController(QObject):
             json.dump(self.data, f, ensure_ascii=False, indent=2)
         QMessageBox.information(self.view, '提示', '数据已保存')
         # 发出数据保存完成信号
-        self.data_saved.emit(self.data)
+        self.data_manager.set_current_data(self.data)
+        self.data_saved.emit()
 
     def _collect_current_data(self):
         """收集当前界面的数据"""

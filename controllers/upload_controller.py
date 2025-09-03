@@ -456,20 +456,6 @@ class ExtractDataWorker(QThread):
             # 如果只要文件名：os.path.basename(contract_to_file[contract_no])
             entry["源文件"] = contract_to_file[contract_no]
 
-        temp_json_path = os.path.join("temp", "temp_data.json")
-        if os.path.exists(temp_json_path):
-            with open(temp_json_path, 'r', encoding='utf-8') as f:
-                try:
-                    data = json.load(f)
-                    if data:
-                        if isinstance(data, list):
-                            display_data.extend(data)
-                        elif isinstance(data, dict):
-                            display_data.append(data)
-                except Exception as e:
-                    display_data = display_data
-                    print(f"读取 temp_data.json 失败: {e}")
-
         print(f"返回数据: {display_data}")
         return display_data
 
@@ -477,16 +463,17 @@ class ExtractDataWorker(QThread):
 class UploadController(QObject):
     """上传功能控制器"""
     # 定义信号：当文件处理完成时发出
-    file_processed = Signal(object, str)  # 参数为提取的数据, 文件名字符串
+    file_processed = Signal()
     # 定义信号：当开始处理文件时发出
     processing_started = Signal()
     # 定义信号：当处理完成时发出
     processing_finished = Signal()
 
-    def __init__(self, view):
+    def __init__(self, view, data_manager):
         """初始化上传控制器"""
         super().__init__()
         self.view = view
+        self.data_manager = data_manager
         self.uploaded_files = []  # 存储已上传的文件路径
         self.current_workers = []  # 存储当前正在运行的工作线程
         self._connect_signals()
@@ -783,7 +770,20 @@ class UploadController(QObject):
 
         if success:
             # 发出文件处理完成信号
-            self.file_processed.emit(data, filename_str)
+            old_data = self.data_manager.current_data
+            if old_data:
+                old_data = data + old_data
+                old_name = self.data_manager.file_name
+                new_name = filename_str + old_name
+                self.data_manager.set_file_name(new_name)
+                self.data_manager.set_current_data(old_data)
+            else:
+                self.data_manager.set_current_data(data)
+                self.data_manager.set_file_name(filename_str)
+
+            self.clear_file_list()
+            self.view.title.setText("数据审核工具 - 文件上传")
+            self.file_processed.emit()
         else:
             # 显示错误信息
             QMessageBox.critical(self.view, "错误", error_msg)
