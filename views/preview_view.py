@@ -4,19 +4,13 @@
 """
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                                QPushButton, QTableWidget, QTableWidgetItem,
-                               QHeaderView, QTextEdit, QApplication)
+                               QHeaderView, QTextEdit, QApplication, QAbstractItemView)
 from PySide6.QtCore import Signal, Qt
 import sys
 
 
 class PreviewView(QWidget):
     """数据预览界面"""
-
-    # 定义信号：当用户请求最终上传数据时发出
-    final_upload_requested = Signal(dict)  # 参数为最终数据
-
-    # 定义信号：当用户请求返回编辑时发出
-    back_to_edit_requested = Signal()
 
     def __init__(self):
         """初始化预览界面"""
@@ -63,6 +57,8 @@ class PreviewView(QWidget):
 
         # 创建数据表格（只读模式）
         self.preview_table = QTableWidget()
+        # 设置为整行选择
+        self.preview_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.preview_table.setEditTriggers(QTableWidget.NoEditTriggers)  # 设置为只读
         self.preview_table.setAlternatingRowColors(True)
         self.preview_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
