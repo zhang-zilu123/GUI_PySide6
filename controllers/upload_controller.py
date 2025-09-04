@@ -20,29 +20,40 @@ class ExtractDataWorker(QThread):
     # 参数为文件名字符串, 提取的数据, 是否成功, 错误信息
     finished = Signal(str, list, bool, str)
 
-    def __init__(self, file_path):
+    def __init__(self, file_paths):
         super().__init__()
-        self.file_path = file_path
+        # 确保 file_paths 是列表
+        if isinstance(file_paths, str):
+            self.file_paths = [file_paths]
+        elif isinstance(file_paths, list):
+            self.file_paths = file_paths
+        else:
+            self.file_paths = list(file_paths)
 
     def run(self):
         """在线程中执行耗时操作"""
-        filename_list = get_filename_list(self.file_path)
-        filename_str = ", ".join(filename_list)
         try:
+            # 获取文件名列表
+            filename_list = []
+            for file_path in self.file_paths:
+                filename_list.append(os.path.basename(file_path))
+            filename_str = ", ".join(filename_list)
+            print(f"开始解析PDF文件: {self.file_paths}")
             # 提取数据
-            data = self._extract_data_from_pdf(self.file_path)
-            self.finished.emit(filename_str, data, True, "", )
+            data = self._extract_data_from_pdf(self.file_paths)
+            self.finished.emit(filename_str, data, True, "")
         except Exception as e:
             error_msg = f"处理文件时出错: {str(e)}"
-            self.finished.emit(filename_str, {}, False, error_msg)
+            print(f"Error: {error_msg}")
+            self.finished.emit("", [], False, error_msg)
 
-    def _extract_data_from_pdf(self, file_path):
+    def _extract_data_from_pdf(self, file_paths):
         """从PDF文件中提取数据"""
         # 这里应该是实际的PDF解析逻辑
         os.environ['MINERU_MODEL_SOURCE'] = 'local'
-        print(f'开始解析PDF文件: {file_path}')
+        print(f'开始解析PDF文件: {file_paths}')
         # 解析pdf
-        # local_md_dirs = parse_doc(path_list=file_path, output_dir="./output", backend="pipeline")
+        # local_md_dirs = parse_doc(path_list=file_paths, output_dir="./output", backend="pipeline")
         # md_path_list = []
         #
         # for local_md_dir in local_md_dirs:
@@ -57,7 +68,7 @@ class ExtractDataWorker(QThread):
         #     md_path_list.append(md_path)
         #
         # print('生成的md文件路径:', md_path_list)
-        # 大模型解析md文件
+        # # 大模型解析md文件
         # info_dict = extract_info_from_md(md_path_list)
         info_dict = {
             "费用明细": [
@@ -427,6 +438,10 @@ class ExtractDataWorker(QThread):
         #     print('删除临时文件夹 ./output')
 
         # 构建返回数据
+        return self._process_extracted_data(info_dict, file_paths)
+
+    def _process_extracted_data(self, info_dict, file_paths):
+        """处理提取的数据"""
         display_data = []
         if "费用明细" in info_dict and isinstance(info_dict["费用明细"], list):
             # 处理每个费用条目
@@ -441,32 +456,32 @@ class ExtractDataWorker(QThread):
                 entry_info["金额"] = entry_detail.get("金额", "")
                 entry_info["备注"] = entry_detail.get("备注", "")
                 display_data.append(entry_info)
+        # 为每个条目分配源文件
+        self._assign_source_files(display_data, file_paths)
+        print(f"最终返回数据: {len(display_data)} 条记录")
+        return display_data
 
+    def _assign_source_files(self, display_data, file_paths):
+        """为数据条目分配源文件"""
         file_index = 0
         contract_to_file = {}
-
         for entry in display_data:
             contract_no = entry["外销合同"]
             if contract_no not in contract_to_file:  # 第一次遇到这个合同号
-                if file_index < len(file_path):
-                    contract_to_file[contract_no] = file_path[file_index]
+                if file_index < len(file_paths):
+                    contract_to_file[contract_no] = file_paths[file_index]
                     file_index += 1
                 else:
                     contract_to_file[contract_no] = ""  # 文件不够用，给空
-            # 如果只要文件名：os.path.basename(contract_to_file[contract_no])
             entry["源文件"] = contract_to_file[contract_no]
-
-        print(f"返回数据: {display_data}")
-        return display_data
 
 
 class UploadController(QObject):
     """上传功能控制器"""
-    # 定义信号：当文件处理完成时发出
+
+    # 信号定义
     file_processed = Signal()
-    # 定义信号：当开始处理文件时发出
     processing_started = Signal()
-    # 定义信号：当处理完成时发出
     processing_finished = Signal()
 
     def __init__(self, view, data_manager):
@@ -474,21 +489,22 @@ class UploadController(QObject):
         super().__init__()
         self.view = view
         self.data_manager = data_manager
-        self.uploaded_files = []  # 存储已上传的文件路径
-        self.current_workers = []  # 存储当前正在运行的工作线程
-        self._connect_signals()
+        self.uploaded_files = []
+        self.current_workers = []
+        self._setup_controller()
 
+    def _setup_controller(self):
+        """设置控制器"""
+        self._connect_signals()
+        self._reset_to_initial_state()
+
+    # ==================== 信号连接 ====================
     def _connect_signals(self):
         """连接视图信号"""
-        # 上传区域点击事件
         self.view.upload_frame.mousePressEvent = self._on_upload_area_clicked
-        # 上传按钮点击事件
         self.view.upload_requested.connect(self._on_upload_requested)
-        #  重新上传按钮点击事件
         self.view.clear_requested.connect(self.clear_file_list)
-        # 分析按钮点击事件
         self.view.analyze_requested.connect(self._on_analyze_requested)
-        # 拖拽文件事件
         self.view.files_dropped.connect(self._on_files_dropped)
 
     def _on_upload_area_clicked(self, event):
@@ -501,327 +517,331 @@ class UploadController(QObject):
 
     def _on_files_dropped(self, file_paths):
         """处理拖拽文件事件"""
-        valid_files = []
-        for file_path in file_paths:
-            if self._validate_file(file_path):  # 验证文件格式
-                valid_files.append(file_path)
+        valid_files = [fp for fp in file_paths if self._validate_file(fp)]
         if valid_files:
-            self.add_uploaded_file(valid_files)
+            self._add_files_to_list(valid_files)
 
+    def _on_analyze_requested(self):
+        """处理分析请求"""
+        if not self.uploaded_files:
+            QMessageBox.warning(self.view, "提示", "请先上传文件")
+            return
+
+        self._start_analysis()
+
+    # ==================== 文件操作 ====================
     def _open_file_dialog(self):
         """打开文件选择对话框"""
         file_paths, _ = QFileDialog.getOpenFileNames(
             self.view,
-            "选择文件",
+            "选择PDF文件",
             "",
             "PDF文件 (*.pdf);;所有文件 (*.*)"
         )
 
         if file_paths:
-            valid_files = []
-            for file_path in file_paths:
-                if self._process_file(file_path):  # 验证文件格式
+            self._process_selected_files(file_paths)
+
+    def _process_selected_files(self, file_paths):
+        """处理选择的文件"""
+        valid_files = []
+        invalid_files = []
+        for file_path in file_paths:
+            if self._validate_file(file_path):
+                if not self._is_file_already_uploaded(file_path):
                     valid_files.append(file_path)
-            if valid_files:
-                self.add_uploaded_file(valid_files)
+                else:
+                    self._show_file_exists_message(file_path)
+            else:
+                invalid_files.append(file_path)
+        self._handle_file_validation_results(valid_files, invalid_files)
 
-    def show_file_list(self):
-        """显示文件列表，隐藏上传信息框"""
-        self.view.upload_frame.setVisible(False)
-        self.view.scroll_area.setVisible(True)
-        self.view.files_widget.setVisible(True)
-        self.view.clear_button.setVisible(True)
+    def _is_file_already_uploaded(self, file_path):
+        """检查文件是否已经上传"""
+        file_name = os.path.basename(file_path)
+        uploaded_file_names = self._get_uploaded_file_names()
+        return file_name in uploaded_file_names
 
-    def hide_file_list(self):
-        """隐藏文件列表，显示上传信息框"""
-        self.view.upload_frame.setVisible(True)
-        self.view.scroll_area.setVisible(False)
-        self.view.files_widget.setVisible(False)
-        self.view.clear_button.setVisible(False)
+    def _get_uploaded_file_names(self):
+        """获取已上传的文件名列表"""
+        if not hasattr(self.data_manager, 'uploaded_file_name') or not self.data_manager.uploaded_file_name:
+            return []
+        if isinstance(self.data_manager.uploaded_file_name, str):
+            return [name.strip() for name in self.data_manager.uploaded_file_name.split(',')]
+        return []
 
-    def add_files(self, files):
-        """添加文件到界面"""
-        has_new_files = False
-        for file_path in files:
-            if file_path not in self.uploaded_files:
-                self.uploaded_files.append(file_path)
-                has_new_files = True
+    def _show_file_exists_message(self, file_path):
+        """显示文件已存在的消息"""
+        file_name = os.path.basename(file_path)
+        QMessageBox.information(
+            self.view,
+            "文件已存在",
+            f"文件 {file_name} 已在列表中"
+        )
 
-                # 为每个文件创建一个水平布局，包含文件名按钮和删除按钮
-                file_layout = QHBoxLayout()
-                file_layout.setContentsMargins(0, 0, 0, 0)
+    def _handle_file_validation_results(self, valid_files, invalid_files):
+        """处理文件验证结果"""
+        if invalid_files:
+            self._show_invalid_files_message(invalid_files)
+        if valid_files:
+            self._add_files_to_list(valid_files)
 
-                # 文件名按钮
-                file_button = QPushButton(os.path.basename(file_path))
-                file_button.setToolTip(file_path)
-                file_button.setStyleSheet("""
-                    QPushButton {
-                        text-align: left;
-                        padding: 8px;
-                        border: none;
-                        background-color: transparent;
-                        border-bottom: 1px solid #eee;
-                    }
-                    QPushButton:hover {
-                        background-color: #f5f5f5;
-                    }
-                """)
-                file_button.setCursor(Qt.PointingHandCursor)
+    def _show_invalid_files_message(self, invalid_files):
+        """显示无效文件消息"""
+        invalid_names = [os.path.basename(fp) for fp in invalid_files]
+        QMessageBox.warning(
+            self.view,
+            "文件格式错误",
+            f"以下文件格式不支持:\n{', '.join(invalid_names)}\n\n请选择PDF文件"
+        )
 
-                # 删除按钮
-                delete_button = QPushButton("×")
-                delete_button.setFixedSize(24, 24)
-                delete_button.setStyleSheet("""
-                    QPushButton {
-                        background-color: #ff4444;
-                        color: white;
-                        border-radius: 12px;
-                        font-weight: bold;
-                    }
-                    QPushButton:hover {
-                        background-color: #cc0000;
-                    }
-                """)
-                delete_button.setCursor(Qt.PointingHandCursor)
-                delete_button.clicked.connect(lambda checked, fp=file_path: self._remove_file(fp))
+    def _validate_file(self, file_path):
+        """验证文件格式"""
+        if not os.path.isfile(file_path):
+            return False
+        _, ext = os.path.splitext(file_path)
+        return ext.lower() == '.pdf'
 
-                file_layout.addWidget(file_button)
-                file_layout.addStretch()
-                file_layout.addWidget(delete_button)
+    # ==================== 文件列表管理 ====================
+    def _add_files_to_list(self, file_paths):
+        """添加文件到列表"""
+        if not file_paths:
+            return
 
-                self.view.files_layout.addLayout(file_layout)
+        self.uploaded_files.extend(file_paths)
+        self._rebuild_file_display()
+        self._update_ui_state()
+        self._update_instruction_text()
 
-        # 如果有新文件添加，显示文件区域和分析按钮
-        if has_new_files and len(self.uploaded_files) > 0:
-            self.view.scroll_area.setVisible(True)
-            self.view.files_widget.setVisible(True)
-            self.view.analyze_button.setVisible(True)
+    def _update_instruction_text(self):
+        """更新说明文字"""
+        file_count = len(self.uploaded_files)
+        self.view.instruction.setText(
+            f"已选择 {file_count} 个文件，可点击'继续上传'增加文件或点击'开始分析'提取数据"
+        )
 
-        # 如果有新文件添加，显示文件区域和分析按钮
-        if has_new_files and len(self.uploaded_files) > 0:
-            self.view.scroll_area.setVisible(True)
-            self.view.files_widget.setVisible(True)
-            self.view.analyze_button.setVisible(True)
+    def _rebuild_file_display(self):
+        """重新构建文件显示"""
+        self._clear_file_layout()
+        for file_path in self.uploaded_files:
+            self._create_file_item(file_path)
+
+    def _clear_file_layout(self):
+        """清除文件布局中的所有控件"""
+        while self.view.files_layout.count():
+            child = self.view.files_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+            elif child.layout():
+                self._clear_layout_recursive(child.layout())
+
+    def _clear_layout_recursive(self, layout):
+        """递归清除布局"""
+        while layout.count():
+            child = layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+            elif child.layout():
+                self._clear_layout_recursive(child.layout())
+
+    def _create_file_item(self, file_path):
+        """创建文件项显示"""
+        file_layout = QHBoxLayout()
+        file_layout.setContentsMargins(0, 0, 0, 0)
+        # 文件名按钮
+        file_button = self._create_file_button(file_path)
+        delete_button = self._create_delete_button(file_path)
+        file_layout.addWidget(file_button)
+        file_layout.addStretch()
+        file_layout.addWidget(delete_button)
+
+        self.view.files_layout.addLayout(file_layout)
+
+    def _create_file_button(self, file_path):
+        """创建文件按钮"""
+        file_button = QPushButton(os.path.basename(file_path))
+        file_button.setToolTip(file_path)
+        file_button.setStyleSheet("""
+            QPushButton {
+                text-align: left;
+                padding: 8px;
+                border: none;
+                background-color: transparent;
+                border-bottom: 1px solid #eee;
+            }
+            QPushButton:hover {
+                background-color: #f5f5f5;
+            }
+        """)
+        file_button.setCursor(Qt.PointingHandCursor)
+        return file_button
+
+    def _create_delete_button(self, file_path):
+        """创建删除按钮"""
+        delete_button = QPushButton("×")
+        delete_button.setFixedSize(24, 24)
+        delete_button.setStyleSheet("""
+            QPushButton {
+                background-color: #ff4444;
+                color: white;
+                border-radius: 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #cc0000;
+            }
+        """)
+        delete_button.setCursor(Qt.PointingHandCursor)
+        delete_button.clicked.connect(lambda: self._remove_file(file_path))
+        return delete_button
 
     def _remove_file(self, file_path):
         """删除指定文件"""
         if file_path in self.uploaded_files:
-            # 从文件路径列表中移除
             self.uploaded_files.remove(file_path)
+            self._rebuild_file_display()
+            self._update_ui_state()
 
-            # 重新构建文件显示区域
-            self._rebuild_file_list()
-
-            # 如果没有文件了，隐藏相关区域
-            if len(self.uploaded_files) == 0:
-                self.view.scroll_area.setVisible(False)
-                self.view.files_widget.setVisible(False)
-                self.view.analyze_button.setVisible(False)
-                self.view.clear_button.setVisible(False)
-                self.view.upload_frame.setVisible(True)
-                self.view.upload_button.setVisible(True)
-                self.view.upload_button.setText("上传")
-                self.view.upload_info.setText("""
-                    <div style="font-size: 48px;">📁</div>
-                    <div style="font-size: 16px; color: #888;">点击或拖拽文件到此处上传</div>
-                    <div style="font-size: 12px; color: #aaa;">支持格式: pdf</div>
-                """)
-                self.view.instruction.setText("请上传需要审核的数据文件")
-
-    def _rebuild_file_list(self):
-        """重新构建文件列表显示"""
-        # 清除现有布局中的所有控件
-        while self.view.files_layout.count():
-            child = self.view.files_layout.takeAt(0)
-            if child.widget():
-                child.widget().deleteLater()
-            elif child.layout():
-                # 递归删除布局中的控件
-                sub_layout = child.layout()
-                while sub_layout.count():
-                    sub_child = sub_layout.takeAt(0)
-                    if sub_child.widget():
-                        sub_child.widget().deleteLater()
-
-        # 重新添加所有文件
-        for file_path in self.uploaded_files:
-            # 为每个文件创建一个水平布局，包含文件名按钮和删除按钮
-            file_layout = QHBoxLayout()
-            file_layout.setContentsMargins(0, 0, 0, 0)
-
-            # 文件名按钮
-            file_button = QPushButton(os.path.basename(file_path))
-            file_button.setToolTip(file_path)
-            file_button.setStyleSheet("""
-                QPushButton {
-                    text-align: left;
-                    padding: 8px;
-                    border: none;
-                    background-color: transparent;
-                    border-bottom: 1px solid #eee;
-                }
-                QPushButton:hover {
-                    background-color: #f5f5f5;
-                }
-            """)
-            file_button.setCursor(Qt.PointingHandCursor)
-
-            # 删除按钮
-            delete_button = QPushButton("×")
-            delete_button.setFixedSize(24, 24)
-            delete_button.setStyleSheet("""
-                QPushButton {
-                    background-color: #ff4444;
-                    color: white;
-                    border-radius: 12px;
-                    font-weight: bold;
-                }
-                QPushButton:hover {
-                    background-color: #cc0000;
-                }
-            """)
-            delete_button.setCursor(Qt.PointingHandCursor)
-            delete_button.clicked.connect(lambda checked, fp=file_path: self._remove_file(fp))
-
-            file_layout.addWidget(file_button)
-            file_layout.addStretch()
-            file_layout.addWidget(delete_button)
-
-            self.view.files_layout.addLayout(file_layout)
-
-    def add_uploaded_file(self, file_paths):
-        """添加上传的文件到列表"""
-        # 使用新的文件添加方法
-        self.add_files(file_paths)
-
-        # 显示分析按钮
-        self.view.analyze_button.setVisible(True)
-
-        # 更新上传按钮文字
-        self.view.upload_button.setText("继续上传")
-
-        self.show_file_list()
-
-        self.view.instruction.setText(f"可点击'继续上传'增加需要提取的文件或者点击'开始分析'提取数据")
+            if self.uploaded_files:
+                self._update_instruction_text()
+            else:
+                self._reset_to_initial_state()
 
     def clear_file_list(self):
         """清空文件列表"""
         self.uploaded_files.clear()
-        # 清除现有布局中的所有控件
-        while self.view.files_layout.count():
-            child = self.view.files_layout.takeAt(0)
-            if child.widget():
-                child.widget().deleteLater()
-            elif child.layout():
-                # 递归删除布局中的控件
-                sub_layout = child.layout()
-                while sub_layout.count():
-                    sub_child = sub_layout.takeAt(0)
-                    if sub_child.widget():
-                        sub_child.widget().deleteLater()
+        self._clear_file_layout()
+        self._reset_to_initial_state()
 
-        self.hide_file_list()
+    # ==================== UI 状态管理 ====================
+    def _update_ui_state(self):
+        """更新界面状态"""
+        has_files = len(self.uploaded_files) > 0
 
-        # 隐藏分析按钮
+        if has_files:
+            self._show_file_list_state()
+        else:
+            self._reset_to_initial_state()
+
+    def _show_file_list_state(self):
+        """显示文件列表状态"""
+        self.view.upload_frame.setVisible(False)
+        self.view.scroll_area.setVisible(True)
+        self.view.files_widget.setVisible(True)
+        self.view.analyze_button.setVisible(True)
+        self.view.clear_button.setVisible(True)
+        self.view.upload_button.setText("继续上传")
+
+    def _reset_to_initial_state(self):
+        """重置到初始状态"""
+        self.view.upload_frame.setVisible(True)
+        self.view.scroll_area.setVisible(False)
+        self.view.files_widget.setVisible(False)
         self.view.analyze_button.setVisible(False)
-
-        # 恢复上传按钮文字
+        self.view.clear_button.setVisible(False)
         self.view.upload_button.setText("上传")
-
-        # 重置说明文字
         self.view.instruction.setText("请上传需要审核的数据文件")
+        self._reset_upload_info_display()
 
-    def _on_analyze_requested(self):
-        """处理分析请求"""
-        if self.uploaded_files:
-            # 禁用界面控件
-            self._disable_ui_controls()
-            # 发出开始处理信号
-            self.processing_started.emit()
-            self.view.title.setText("正在提取识别中，请稍候...")
+    def _reset_upload_info_display(self):
+        """重置上传信息显示"""
+        self.view.upload_info.setText("""
+            <div style="font-size: 48px;">📁</div>
+            <div style="font-size: 16px; color: #888;">点击或拖拽文件到此处上传</div>
+            <div style="font-size: 12px; color: #aaa;">支持格式: pdf</div>
+        """)
 
-            worker = ExtractDataWorker(self.uploaded_files)
-            worker.finished.connect(self._on_worker_finished)
-            worker.start()
-            self.current_workers.append(worker)
+    def _set_processing_state(self, processing):
+        """设置处理状态"""
+        enabled = not processing
+        self.view.upload_button.setEnabled(enabled)
+        self.view.analyze_button.setEnabled(enabled)
+        self.view.clear_button.setEnabled(enabled)
+        self.view.upload_frame.setEnabled(enabled)
 
-    def _disable_ui_controls(self):
-        """禁用界面控件"""
-        self.view.upload_button.setEnabled(False)
-        self.view.analyze_button.setEnabled(False)
-        self.view.clear_button.setEnabled(False)
-        # 禁用上传区域的点击事件
-        self.view.upload_frame.setEnabled(False)
+    # ==================== 数据分析处理 ====================
+    def _start_analysis(self):
+        """开始分析处理"""
+        self._set_processing_state(True)
+        self.processing_started.emit()
+        self.view.title.setText("正在提取识别中，请稍候...")
 
-    def _enable_ui_controls(self):
-        """启用界面控件"""
-        self.view.upload_button.setEnabled(True)
-        self.view.analyze_button.setEnabled(True)
-        self.view.clear_button.setEnabled(True)
-        # 启用上传区域的点击事件
-        self.view.upload_frame.setEnabled(True)
+        worker = ExtractDataWorker(self.uploaded_files.copy())
+        worker.finished.connect(self._on_worker_finished)
+        worker.start()
+        self.current_workers.append(worker)
 
     def _on_worker_finished(self, filename_str, data, success, error_msg):
         """处理工作线程完成事件"""
-        # 从当前工作线程列表中移除已完成的线程
+        self._cleanup_worker()
+
+        if success:
+            self._handle_extraction_success(filename_str, data)
+        else:
+            self._handle_extraction_error(error_msg)
+
+        if not self.current_workers:
+            self._finish_processing()
+
+    def _cleanup_worker(self):
+        """清理工作线程"""
         sender = self.sender()
         if sender in self.current_workers:
             self.current_workers.remove(sender)
+            sender.deleteLater()
 
-        if success:
-            # 发出文件处理完成信号
-            old_data = self.data_manager.current_data
-            if old_data:
-                old_data = data + old_data
-                old_name = self.data_manager.file_name
-                new_name = filename_str + old_name
-                self.data_manager.set_file_name(new_name)
-                self.data_manager.set_current_data(old_data)
-            else:
-                self.data_manager.set_current_data(data)
-                self.data_manager.set_file_name(filename_str)
+    def _finish_processing(self):
+        """完成处理"""
+        self._set_processing_state(False)
+        self.processing_finished.emit()
 
-            self.clear_file_list()
-            self.view.title.setText("数据审核工具 - 文件上传")
-            self.file_processed.emit()
-        else:
-            # 显示错误信息
-            QMessageBox.critical(self.view, "错误", error_msg)
-
-        # 如果所有工作线程都完成了，发出处理完成信号
-        if not self.current_workers:
-            self._enable_ui_controls()
-            self.processing_finished.emit()
-
-    def _validate_file(self, file_path):
-        """验证文件格式是否支持"""
-        if not os.path.isfile(file_path):
-            return False
-
-        _, ext = os.path.splitext(file_path)
-        return ext.lower() == '.pdf'
-
-    def _process_file(self, file_path):
-        """验证上传的文件"""
+    def _handle_extraction_success(self, filename_str, data):
+        """处理提取成功"""
         try:
-            # 验证文件
-            if not self._validate_file(file_path):
-                # 使用消息框提示错误
-                QMessageBox.warning(self.view, "文件格式错误", f"{file_path}不是规定的文件格式，请上传PDF文件")
-                return False  # 表示处理失败
-
-            # 获取文件名并检查是否已上传过
-            file_name = os.path.basename(file_path)
-            print('hdfasoi', file_name)
-            if self.data_manager.uploaded_file_name and file_name in self.data_manager.uploaded_file_name:
-                QMessageBox.warning(self.view, "文件重复", f"文件 {file_name} 已经上传过了")
-                return False
-
-            # 文件验证通过，添加到上传列表
-            self.add_uploaded_file(file_path)
-            return True  # 表示处理成功
-
+            self._merge_and_save_data(filename_str, data)
+            self._cleanup_after_success()
+            print(f"成功处理 {len(data)} 条记录")
         except Exception as e:
-            error_msg = f"验证文件时出错: {str(e)}"
+            error_msg = f"保存数据时出错: {str(e)}"
             QMessageBox.critical(self.view, "错误", error_msg)
-            return False
+
+    def _merge_and_save_data(self, filename_str, data):
+        """合并并保存数据"""
+        old_data = self.data_manager.current_data or []
+        combined_data = data + old_data
+
+        old_name = self.data_manager.file_name or ""
+        new_name = f"{filename_str}, {old_name}".strip(", ")
+
+        self.data_manager.set_current_data(combined_data)
+        self.data_manager.set_file_name(new_name)
+
+    def _cleanup_after_success(self):
+        """成功后的清理工作"""
+        self.clear_file_list()
+        self.view.title.setText("数据审核工具 - 文件上传")
+        self.file_processed.emit()
+
+    def _handle_extraction_error(self, error_msg):
+        """处理提取错误"""
+        self.view.title.setText("数据审核工具 - 文件上传")
+        QMessageBox.critical(self.view, "提取失败", error_msg)
+
+    # ==================== 公共接口 ====================
+    def add_uploaded_file(self, file_paths):
+        """添加上传的文件到列表（公共接口）"""
+        if isinstance(file_paths, str):
+            file_paths = [file_paths]
+        self._add_files_to_list(file_paths)
+
+    def add_files(self, files):
+        """添加文件到界面（公共接口）"""
+        self._add_files_to_list(files)
+
+    def show_file_list(self):
+        """显示文件列表（公共接口）"""
+        self._update_ui_state()
+
+    def hide_file_list(self):
+        """隐藏文件列表（公共接口）"""
+        self._reset_to_initial_state()
