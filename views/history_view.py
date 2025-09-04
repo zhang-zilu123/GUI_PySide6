@@ -23,25 +23,36 @@ class HistoryView(QWidget):
         """设置界面UI元素"""
         # 创建主布局
         main_layout = QVBoxLayout()
-        main_layout.setSpacing(15)
+        main_layout.setSpacing(10)  # 减少间距
         main_layout.setContentsMargins(20, 20, 20, 20)
         self.setLayout(main_layout)
+
+        # 创建标题区域容器，限制高度
+        header_widget = QWidget()
+        header_widget.setFixedHeight(80)  # 固定标题区域高度
+        header_layout = QVBoxLayout(header_widget)
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        header_layout.setSpacing(5)
 
         # 添加标题
         title = QLabel("查看历史上传")
         title.setAlignment(Qt.AlignCenter)
         title.setStyleSheet("font-size: 23px; font-weight: bold;")
-        main_layout.addWidget(title)
+        title.setFixedHeight(35)  # 固定标题高度
+        header_layout.addWidget(title)
 
         # 添加说明文字
         instruction = QLabel("查看已上传的文件和历史数据记录")
         instruction.setAlignment(Qt.AlignCenter)
-        instruction.setStyleSheet("font-size: 18px; color: #666; margin-bottom: 20px;")
-        main_layout.addWidget(instruction)
+        instruction.setStyleSheet("font-size: 14px; color: #666;")  # 减小字体
+        instruction.setFixedHeight(25)  # 固定说明文字高度
+        header_layout.addWidget(instruction)
+
+        main_layout.addWidget(header_widget)
 
         # 创建分割器以支持调整大小
         splitter = QSplitter(Qt.Horizontal)
-        main_layout.addWidget(splitter)
+        main_layout.addWidget(splitter, 1)
 
         # 左侧区域 - 文件列表
         left_widget = QWidget()
@@ -50,7 +61,8 @@ class HistoryView(QWidget):
 
         # 文件列表标题
         file_list_label = QLabel("上传记录列表")
-        file_list_label.setStyleSheet("font-weight: bold; margin-bottom: 10px;")
+        file_list_label.setStyleSheet("font-weight: bold; font-size: 14px; margin-bottom: 5px;")
+        file_list_label.setFixedHeight(25)
         left_layout.addWidget(file_list_label)
 
         # 文件列表
@@ -58,16 +70,27 @@ class HistoryView(QWidget):
         self.file_list.setStyleSheet("""
             QListWidget {
                 border: 1px solid #ccc;
+                background-color: white;
+                outline: none;
             }
             QListWidget::item {
-                padding: 8px;
+                padding: 10px;
                 border-bottom: 1px solid #eee;
+                background-color: white;
+            }
+            QListWidget::item:hover {
+                background-color: #f0f8ff;
             }
             QListWidget::item:selected {
-                background-color: #e3f2fd;
+                background-color: #4a90e2;
+                color: white;
+                border: none;
+            }
+            QListWidget::item:selected:hover {
+                background-color: #357abd;
             }
         """)
-        left_layout.addWidget(self.file_list)
+        left_layout.addWidget(self.file_list, 1)  # 让列表占据剩余空间
         splitter.addWidget(left_widget)
 
         # 右侧区域 - 数据详情
@@ -77,27 +100,30 @@ class HistoryView(QWidget):
 
         # 数据详情标题
         data_detail_label = QLabel("数据详情")
-        data_detail_label.setStyleSheet("font-weight: bold; margin-bottom: 10px;")
+        data_detail_label.setStyleSheet("font-weight: bold; font-size: 14px; margin-bottom: 5px;")
+        data_detail_label.setFixedHeight(25)  # 固定高度
         right_layout.addWidget(data_detail_label)
 
         # 创建文件名信息区域
         file_info_widget = QWidget()
+        file_info_widget.setFixedHeight(40)  # 固定文件信息区域高度
         file_info_widget.setStyleSheet("""
             QWidget {
                 background-color: #f9f9f9;
-                border: 1px solid #ccc;
+                border: 1px solid #ddd;
+                border-radius: 4px;
             }
         """)
         file_info_layout = QHBoxLayout(file_info_widget)
         file_info_layout.setContentsMargins(10, 8, 10, 8)
 
         file_name_label = QLabel("文件名:")
-        file_name_label.setStyleSheet("font-weight: bold;")
+        file_name_label.setStyleSheet("font-weight: bold; font-size: 13px;")
 
         # 重要：设置可被控制器引用的文件名标签
         self.file_name_value = QLabel("请选择一个记录")
         self.file_name_value.setObjectName("file_name_display")
-        self.file_name_value.setStyleSheet("margin-left: 10px; color: #666;")
+        self.file_name_value.setStyleSheet("margin-left: 10px; color: #666; font-size: 13px;")
 
         file_info_layout.addWidget(file_name_label)
         file_info_layout.addWidget(self.file_name_value)
@@ -120,6 +146,12 @@ class HistoryView(QWidget):
             QTableWidget {
                 gridline-color: #ddd;
                 border: 1px solid #ccc;
+                background-color: white;
+                alternate-background-color: #f8f8f8;
+            }
+            QTableWidget::item:selected {
+                background-color: #4a90e2;
+                color: white;
             }
         """)
 
@@ -135,6 +167,8 @@ class HistoryView(QWidget):
         right_layout.addWidget(self.data_table, 1)  # 表格占据剩余空间
         splitter.addWidget(right_widget)
 
+        # 设置分割器的初始比例 (30% : 70%)
+        splitter.setSizes([300, 700])
 
 
 if __name__ == "__main__":
