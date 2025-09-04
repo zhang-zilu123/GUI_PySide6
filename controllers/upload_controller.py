@@ -576,7 +576,7 @@ class UploadController(QObject):
         QMessageBox.information(
             self.view,
             "文件已存在",
-            f"文件 {file_name} 已在列表中"
+            f"文件 {file_name} 本次已上传，不能重复上传"
         )
 
     def _handle_file_validation_results(self, valid_files, invalid_files):
