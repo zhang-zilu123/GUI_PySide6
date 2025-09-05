@@ -747,8 +747,9 @@ class UploadController(QObject):
         """重置上传信息显示"""
         self.view.upload_info.setText("""
             <div style="font-size: 48px;">📁</div>
-            <div style="font-size: 16px; color: #888;">点击或拖拽文件到此处上传</div>
-            <div style="font-size: 12px; color: #aaa;">支持格式: pdf</div>
+        <div style="font-size: 16px; color: #888;">点击或拖拽文件到此处上传</div>
+        <div style="font-size: 12px; color: #888;">（不建议上传中英混杂的pdf，容易出现解析错误）</div>   
+        <div style="font-size: 12px; color: #aaa;">支持格式: pdf</div>
         """)
 
     def _set_processing_state(self, processing):

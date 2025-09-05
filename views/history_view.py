@@ -23,32 +23,22 @@ class HistoryView(QWidget):
         """设置界面UI元素"""
         # 创建主布局
         main_layout = QVBoxLayout()
-        main_layout.setSpacing(10)  # 减少间距
+        main_layout.setSpacing(15)  # 减少间距
         main_layout.setContentsMargins(20, 20, 20, 20)
         self.setLayout(main_layout)
 
-        # 创建标题区域容器，限制高度
-        header_widget = QWidget()
-        header_widget.setFixedHeight(80)  # 固定标题区域高度
-        header_layout = QVBoxLayout(header_widget)
-        header_layout.setContentsMargins(0, 0, 0, 0)
-        header_layout.setSpacing(5)
 
         # 添加标题
         title = QLabel("查看历史上传")
         title.setAlignment(Qt.AlignCenter)
         title.setStyleSheet("font-size: 23px; font-weight: bold;")
-        title.setFixedHeight(35)  # 固定标题高度
-        header_layout.addWidget(title)
+        main_layout.addWidget(title)
 
         # 添加说明文字
         instruction = QLabel("查看已上传的文件和历史数据记录")
         instruction.setAlignment(Qt.AlignCenter)
-        instruction.setStyleSheet("font-size: 14px; color: #666;")  # 减小字体
-        instruction.setFixedHeight(25)  # 固定说明文字高度
-        header_layout.addWidget(instruction)
-
-        main_layout.addWidget(header_widget)
+        instruction.setStyleSheet("font-size: 14px; color: #666;") 
+        main_layout.addWidget(instruction)
 
         # 创建分割器以支持调整大小
         splitter = QSplitter(Qt.Horizontal)

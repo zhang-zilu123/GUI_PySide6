@@ -34,13 +34,13 @@ class UploadView(QWidget):
         # 添加标题
         self.title = QLabel("数据审核工具 - 文件上传")
         self.title.setAlignment(Qt.AlignCenter)
-        self.title.setStyleSheet("font-size: 20px; font-weight: bold; margin-bottom: 30px;")
+        self.title.setStyleSheet("font-size: 23px; font-weight: bold")
         layout.addWidget(self.title)
         
         # 添加上传区域说明
         self.instruction = QLabel("请上传需要审核的数据文件")
         self.instruction.setAlignment(Qt.AlignCenter)
-        self.instruction.setStyleSheet("font-size: 16px; color: #666; margin-bottom: 20px;")
+        self.instruction.setStyleSheet("font-size: 14px; color: #666")
         layout.addWidget(self.instruction)
         
         # 创建上传区域（带虚线边框的框架）
@@ -82,6 +82,7 @@ class UploadView(QWidget):
         self.upload_info.setText("""
         <div style="font-size: 48px;">📁</div>
         <div style="font-size: 16px; color: #888;">点击或拖拽文件到此处上传</div>
+        <div style="font-size: 12px; color: #888;">（不建议上传中英混杂的pdf，容易出现解析错误）</div>   
         <div style="font-size: 12px; color: #aaa;">支持格式: pdf</div>
         """)
 

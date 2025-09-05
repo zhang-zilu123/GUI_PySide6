@@ -35,23 +35,23 @@ class EditView(QWidget):
         # 添加标题
         self.title_label = QLabel("数据审核与编辑")
         self.title_label.setAlignment(Qt.AlignCenter)
-        self.title_label.setStyleSheet("font-size: 20px; font-weight: bold; ")
+        self.title_label.setStyleSheet("font-size: 23px; font-weight: bold; ")
         main_layout.addWidget(self.title_label)
 
         # 添加说明文字
         instruction = QLabel("请检查并修改识别结果，确认无误后保存")
         instruction.setAlignment(Qt.AlignCenter)
-        instruction.setStyleSheet("color: #666; margin-bottom: 15px;")
+        instruction.setStyleSheet("font-size: 14px; color: #666")
         main_layout.addWidget(instruction)
 
         # 创建文件名显示
         self.filename_label = QLabel('未加载文件')
-        self.filename_label.setStyleSheet("color: #333; font-weight: bold;")
+        self.filename_label.setStyleSheet("color: #333; font-weight: bold; font-size: 14px; margin-bottom: 5px;")
         main_layout.addWidget(self.filename_label)
 
         # 创建数据表格标题
         self.table_label = QLabel("数据表格:")
-        self.table_label.setStyleSheet("font-weight: bold; margin-top: 10px;")
+        self.table_label.setStyleSheet("font-weight: bold; font-size: 14px; margin-bottom: 5px;")
         main_layout.addWidget(self.table_label)
 
         # 创建表格
@@ -85,8 +85,8 @@ class EditView(QWidget):
                 background-color: #FF9800;
                 color: white;
                 border: none;
-                padding: 8px 16px;
-                border-radius: 4px;
+                padding: 10px 20px;
+                border-radius: 5px;
             }
             QPushButton:hover {
                 background-color: #F57C00;
@@ -120,8 +120,8 @@ class EditView(QWidget):
                 background-color: #f44336;
                 color: white;
                 border: none;
-                padding: 8px 16px;
-                border-radius: 4px;
+                padding: 10px 20px;
+                border-radius: 5px;
             }
             QPushButton:hover {
                 background-color: #d32f2f;
