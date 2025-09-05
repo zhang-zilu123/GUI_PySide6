@@ -2,38 +2,116 @@
 预览功能控制器
 处理数据预览相关的业务逻辑
 """
+import json
 import os.path
 import shutil
 
-from PySide6.QtCore import QObject, Signal
-from PySide6.QtWidgets import QDialog, QVBoxLayout
+from PySide6.QtCore import QObject, Signal, Qt, QUrl
+from PySide6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QPushButton, QLabel, QProgressBar, \
+    QDialog, QMessageBox
 from PySide6.QtWebEngineWidgets import QWebEngineView
+from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply
 
 from config.config import SUBMIT_FIELD
 from data.history_manager import HistoryManager
+from data.token_manager import token_manager
 
 
 class LoginDialog(QDialog):
-    """登录弹窗，包含WebEngineView用于登录操作"""
-    
+    """登录弹窗，包含WebEngineView用于扫码登录操作"""
+    login_success = Signal()
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("系统登录")
+        self.network_manager = QNetworkAccessManager(self)
         self.resize(800, 600)
         self._setup_ui()
-        
+        self.get_login_url()
+
     def _setup_ui(self):
-        """设置登录弹窗UI"""
+        """初始化UI布局和WebEngineView"""
         layout = QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
-        
-        # 创建WebEngineView
         self.web_view = QWebEngineView()
-        # 设置默认加载页面，可以根据实际需要修改URL
-        self.web_view.load("https://baidu.com")
-        
         layout.addWidget(self.web_view)
         self.setLayout(layout)
+        # 监听页面跳转
+        self.web_view.urlChanged.connect(self.on_url_changed)
+
+    def get_login_url(self):
+        """请求后端获取扫码登录页面URL"""
+        api_url = 'http://47.100.46.227:5586/api/login/qw_login_url?next=/chat'
+        request = QNetworkRequest(QUrl(api_url))
+        request.setHeader(QNetworkRequest.ContentTypeHeader, "application/json")
+        request.setRawHeader(b"User-Agent", b"PySide6 Network Client")
+        reply = self.network_manager.get(request)
+        reply.finished.connect(self.handle_get_url_response)
+
+    def handle_get_url_response(self):
+        """处理扫码登录页面URL的响应"""
+        reply = self.sender()
+        if not isinstance(reply, QNetworkReply):
+            return
+        if reply.error() == QNetworkReply.NetworkError.NoError:
+            try:
+                data = json.loads(reply.readAll().data().decode())
+                login_url = data.get('data', '') if isinstance(data, dict) else str(data)
+                if login_url:
+                    self.web_view.load(login_url)
+                    self.web_view.setVisible(True)
+                else:
+                    raise ValueError("无法获取登录URL")
+            except Exception as e:
+                QMessageBox.warning(self, "错误", f"解析登录URL失败: {e}")
+        else:
+            QMessageBox.critical(self, "错误", "网络连接失败")
+        reply.deleteLater()
+
+    def on_url_changed(self, qurl):
+        """监听扫码后页面跳转，获取code和state参数并请求后端登录"""
+        url = qurl.toString()
+        print("页面跳转到：", url)
+        if "/login2" in url:
+            from urllib.parse import urlparse, parse_qs
+            parsed = urlparse(url)
+            params = parse_qs(parsed.query)
+            code = params.get("code", [""])[0]
+            state = params.get("state", [""])[0]
+            # 构造登录请求
+            api_url = 'http://47.100.46.227:5586/api/login/qw_login'
+            request = QNetworkRequest(QUrl(api_url))
+            request.setHeader(QNetworkRequest.ContentTypeHeader, "application/json")
+            payload = {
+                'code': code,
+                'state': state
+            }
+            json_data = json.dumps(payload).encode('utf-8')
+            reply = self.network_manager.post(request, json_data)
+            reply.finished.connect(self.handle_login_response)
+
+    def handle_login_response(self):
+        """处理扫码登录后的后端响应，保存token并关闭弹窗"""
+        reply = self.sender()
+        if not isinstance(reply, QNetworkReply):
+            return
+        if reply.error() == QNetworkReply.NetworkError.NoError:
+            try:
+                data = json.loads(reply.readAll().data().decode())
+                if data.get('code') == 200:
+                    self.web_view.urlChanged.disconnect(self.on_url_changed)
+                    token = data.get('data', {}).get('token', '')
+                    token_manager.set_token(token)
+                    self.login_success.emit()
+                    QMessageBox.information(self, "成功", "登录成功, 可上传数据")
+                    self.accept()
+                else:
+                    raise ValueError(data.get('message', '登录失败'))
+            except Exception as e:
+                QMessageBox.warning(self, "错误", f"登录响应解析失败: {e}")
+        else:
+            QMessageBox.critical(self, "错误", "网络连接失败")
+        reply.deleteLater()
 
 
 class PreviewController(QObject):
@@ -45,7 +123,6 @@ class PreviewController(QObject):
     back_to_edit_requested = Signal()
     # 定义信号： 当继续上传请求时发出
     continue_upload_requested = Signal()
-
 
     def __init__(self, view, data_manager):
         """初始化预览控制器"""
@@ -65,9 +142,13 @@ class PreviewController(QObject):
 
     def _on_load_button_clicked(self):
         """处理登录按钮点击事件"""
-        dialog = LoginDialog(self.view)
-        dialog.exec()
-        
+        self.dialog = LoginDialog(self.view)
+        self.dialog.login_success.connect(self._on_login_success)
+        self.dialog.show()
+
+    def _on_login_success(self):
+        token = token_manager.token
+        self.view.load_button.setVisible(False)
 
     def set_data(self, data):
         """设置要预览的数据"""
@@ -110,7 +191,8 @@ class PreviewController(QObject):
             return
         if os.path.exists('temp'):
             shutil.rmtree('temp')
-        
+
+        token = token_manager.token
         try:
             record_path = self.history_manager.save_upload_record(
                 file_name=self.data_manager.file_name,

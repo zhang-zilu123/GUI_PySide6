@@ -111,7 +111,7 @@ class PreviewView(QWidget):
         # 添加弹性空间使上传按钮右对齐
         button_layout.addStretch()
 
-        # 添加上传按钮
+        # 添加登录按钮
         self.load_button = QPushButton("登录")
         self.load_button.setStyleSheet("""
             QPushButton {
