@@ -4,7 +4,8 @@
 """
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                                QPushButton, QTableWidget, QTableWidgetItem,
-                               QHeaderView, QTextEdit, QApplication, QAbstractItemView)
+                               QHeaderView, QTextEdit, QApplication, QAbstractItemView,
+                              )
 from PySide6.QtCore import Signal, Qt
 import sys
 
@@ -109,6 +110,23 @@ class PreviewView(QWidget):
 
         # 添加弹性空间使上传按钮右对齐
         button_layout.addStretch()
+
+        # 添加上传按钮
+        self.load_button = QPushButton("登录")
+        self.load_button.setStyleSheet("""
+            QPushButton {
+                background-color: #00BCD4;
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                font-weight: bold;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #00ACC1;
+            }
+        """)
+        button_layout.addWidget(self.load_button)
 
         # 添加上传按钮
         self.upload_button = QPushButton("确认上传")
