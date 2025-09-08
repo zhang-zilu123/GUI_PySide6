@@ -187,12 +187,18 @@ class PreviewController(QObject):
 
     def _on_upload_clicked(self):
         """处理上传按钮点击事件"""
-        if not self.data:
+        token = token_manager.token
+        if token is None or token == "":
+            QMessageBox.information(self.view, "提示", "请先登录")
             return
+        if not self.data:
+            QMessageBox.information(self.view, "提示", "请先加载数据")
+            return
+
+        # 清理临时文件夹
         if os.path.exists('temp'):
             shutil.rmtree('temp')
 
-        token = token_manager.token
         try:
             record_path = self.history_manager.save_upload_record(
                 file_name=self.data_manager.file_name,
