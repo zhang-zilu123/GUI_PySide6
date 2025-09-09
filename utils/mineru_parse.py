@@ -96,11 +96,11 @@ def do_parse(
             #         json.dumps(content_list, ensure_ascii=False, indent=4),
             #     )
 
-            # if f_dump_middle_json:
-            #     md_writer.write_string(
-            #         f"{pdf_file_name}_middle.json",
-            #         json.dumps(middle_json, ensure_ascii=False, indent=4),
-            #     )
+            if f_dump_middle_json:
+                md_writer.write_string(
+                    f"{pdf_file_name}_middle.json",
+                    json.dumps(middle_json, ensure_ascii=False, indent=4),
+                )
 
             # if f_dump_model_output:
             #     md_writer.write_string(

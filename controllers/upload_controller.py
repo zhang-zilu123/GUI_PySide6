@@ -9,10 +9,13 @@ import json
 from PySide6.QtWidgets import QFileDialog, QMessageBox, QHBoxLayout, QPushButton
 from PySide6.QtCore import QObject, Signal, QThread, Qt
 
+from pathlib import Path
+
 from utils.common import get_filename_list
 from utils.mineru_parse import parse_doc
 from utils.model_md_to_json import extract_info_from_md
-from config.config import EXTRA_FIELD
+from config.config import EXTRA_FIELD, API_KEY
+from utils.table_corrector_multi import TableCorrector
 
 
 class ExtractDataWorker(QThread):
@@ -54,24 +57,25 @@ class ExtractDataWorker(QThread):
         print(f'开始解析PDF文件: {file_paths}')
         # 解析pdf
         local_md_dirs = parse_doc(path_list=file_paths, output_dir="./output", backend="pipeline")
-        md_path_list = []
+        # local_md_dirs = ['./output\\746账单\\auto', './output\\G25RU01070-4A费用明细\\auto',
+        #                  './output\\G25RU03088费用明细\\auto', './output\\G25RU05039费用明细\\auto']
 
+        OUTPUT_DIR = Path(__file__).resolve().parents[1] / "output"
+        corrector = TableCorrector(API_KEY)
+        corrector.process_directory(OUTPUT_DIR)
+
+        info_dict = {}
         for local_md_dir in local_md_dirs:
-            # 从路径中提取文件名：output和auto之间的部分
             path_parts = local_md_dir.replace('\\', '/').split('/')
-            # 找到output和auto的位置，提取中间的文件名
             output_index = path_parts.index('output')
-            filename = path_parts[output_index + 1]  # output后面的就是文件名
+            file_name = path_parts[output_index + 1]
+            md_path = os.path.join(local_md_dir, f"{file_name}.corrected.md")
+            temp = extract_info_from_md(md_path)
+            info_dict = {
+                "费用明细": info_dict.get("费用明细", []) + json.loads(temp).get("费用明细", [])
+            }
 
-            # 构建完整的md文件路径
-            md_path = os.path.join(local_md_dir, f"{filename}.md")
-            md_path_list.append(md_path)
-
-        print('生成的md文件路径:', md_path_list)
-        # 大模型解析md文件
-        info_dict = extract_info_from_md(md_path_list)
         # 测试数据
-
         # info_dict = {
         #     "费用明细": [
         #         {
@@ -434,10 +438,10 @@ class ExtractDataWorker(QThread):
             except json.JSONDecodeError:
                 info_dict = {}
 
-        print(f"解析md文件: {info_dict}")
-        if os.path.exists('./output'):
-            shutil.rmtree('./output')
-            print('删除临时文件夹 ./output')
+        # print(f"解析md文件: {info_dict}")
+        # if os.path.exists('./output'):
+        #     shutil.rmtree('./output')
+        #     print('删除临时文件夹 ./output')
 
         # 构建返回数据
         return self._process_extracted_data(info_dict, file_paths)
