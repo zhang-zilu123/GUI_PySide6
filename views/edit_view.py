@@ -3,10 +3,12 @@
 用户在此界面查看和编辑识别后的数据
 """
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-                               QPushButton, QTableWidget, QMenu,
-                               QHeaderView, QApplication, QLineEdit, QAbstractItemView)
+                             QPushButton, QTableWidget, QMenu,
+                             QHeaderView, QApplication, QLineEdit,
+                             QAbstractItemView)
 from PySide6.QtCore import Signal, Qt
 from PySide6.QtGui import QIcon
+from styles import StyleManager
 import sys
 import os
 
@@ -35,23 +37,23 @@ class EditView(QWidget):
         # 添加标题
         self.title_label = QLabel("数据审核与编辑")
         self.title_label.setAlignment(Qt.AlignCenter)
-        self.title_label.setStyleSheet("font-size: 23px; font-weight: bold; ")
+        StyleManager.apply_label_style(self.title_label, 'title')
         main_layout.addWidget(self.title_label)
 
         # 添加说明文字
         instruction = QLabel("请检查并修改识别结果，确认无误后保存")
         instruction.setAlignment(Qt.AlignCenter)
-        instruction.setStyleSheet("font-size: 14px; color: #666")
+        StyleManager.apply_label_style(instruction, 'description')
         main_layout.addWidget(instruction)
 
         # 创建文件名显示
         self.filename_label = QLabel('未加载文件')
-        self.filename_label.setStyleSheet("color: #333; font-weight: bold; font-size: 14px; margin-bottom: 5px;")
+        StyleManager.apply_label_style(self.filename_label, 'subtitle')
         main_layout.addWidget(self.filename_label)
 
         # 创建数据表格标题
         self.table_label = QLabel("数据表格:")
-        self.table_label.setStyleSheet("font-weight: bold; font-size: 14px; margin-bottom: 5px;")
+        StyleManager.apply_label_style(self.table_label, 'subtitle')
         main_layout.addWidget(self.table_label)
 
         # 创建表格
@@ -80,53 +82,15 @@ class EditView(QWidget):
         # 添加临时保存按钮
         self.temp_save_button = QPushButton("保存")
         self.temp_save_button.setVisible(True)  # 默认隐藏
-        self.temp_save_button.setStyleSheet("""
-            QPushButton {
-                background-color: #FF9800;
-                color: white;
-                border: none;
-                padding: 10px 20px;
-                border-radius: 5px;
-            }
-            QPushButton:hover {
-                background-color: #F57C00;
-            }
-        """)
+        StyleManager.apply_button_style(self.temp_save_button, 'warning')
         button_layout.addWidget(self.temp_save_button)
-
-        # 添加编辑按钮
-        # self.edit_button = QPushButton("编辑数据")
-        # self.edit_button.setStyleSheet("""
-        #     QPushButton {
-        #         background-color: #00C957;
-        #         color: white;
-        #         border: none;
-        #         padding: 8px 16px;
-        #         border-radius: 4px;
-        #     }
-        #     QPushButton:hover {
-        #         background-color: #00A85A;
-        #     }
-        # """)
-        # button_layout.addWidget(self.edit_button)
 
         # 添加弹性空间使按钮右对齐
         button_layout.addStretch()
 
         # 添加完成编辑按钮
         self.finish_button = QPushButton("提交")
-        self.finish_button.setStyleSheet("""
-            QPushButton {
-                background-color: #f44336;
-                color: white;
-                border: none;
-                padding: 10px 20px;
-                border-radius: 5px;
-            }
-            QPushButton:hover {
-                background-color: #d32f2f;
-            }
-        """)
+        StyleManager.apply_button_style(self.finish_button, 'primary')
         button_layout.addWidget(self.finish_button)
 
         main_layout.addLayout(button_layout)
