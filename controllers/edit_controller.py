@@ -10,6 +10,8 @@ from PySide6.QtWidgets import QTableWidgetItem, QMenu, QToolTip, QAbstractItemVi
 from config.config import EXTRA_FIELD
 from PySide6.QtWidgets import QMessageBox
 
+from utils.common import generate_light_colors
+
 
 class EditController(QObject):
     """编辑功能控制器"""
@@ -57,7 +59,9 @@ class EditController(QObject):
         # 按照EXTRA_FIELD中的顺序填充表格数据
         for row, data_row in enumerate(data_list):
             contract_value = data_row.get("外销合同", "")
-            background_color = contract_colors.get(contract_value, "#ffffff")
+            currency_value = data_row.get("货币代码", "")
+            key = (contract_value, currency_value)
+            background_color = contract_colors.get(key, "#ffffff")
 
             for col, field in enumerate(EXTRA_FIELD):
                 # 字段值
@@ -76,34 +80,24 @@ class EditController(QObject):
                 self.view.data_table.setItem(row, col, value_item)
 
     def _generate_contract_colors(self, data_list):
-        """为不同的外销合同生成颜色映射"""
-        # 获取所有唯一的外销合同值
-        contracts = set()
+        """为不同的外销合同+货币代码组合生成颜色映射"""
+        # 获取所有唯一的 (外销合同, 货币代码) 组合
+        contract_currency_pairs = set()
         for data_row in data_list:
             contract = data_row.get("外销合同", "")
-            contracts.add(contract)
-        # 预定义的颜色列表（浅色系，便于阅读文字）
-        colors = [
-            "#E3F2FD",  # 浅蓝色
-            "#E8F5E8",  # 浅绿色
-            "#FFF3E0",  # 浅橙色
-            "#F3E5F5",  # 浅紫色
-            "#E0F2F1",  # 浅青色
-            "#FCE4EC",  # 浅粉色
-            "#F1F8E9",  # 浅黄绿色
-            "#EFEBE9",  # 浅棕色
-            "#FAFAFA",  # 浅灰色
-            "#E8EAF6",  # 浅靛蓝色
-        ]
-        # 为每个合同分配颜色
-        contract_colors = {}
-        contract_list = sorted(list(contracts))  # 排序确保一致性
+            currency = data_row.get("货币代码", "")
+            key = (contract, currency)
+            contract_currency_pairs.add(key)
 
-        for i, contract in enumerate(contract_list):
-            if contract == "":  # 空值使用白色
-                contract_colors[contract] = "#ffffff"
+        colors = generate_light_colors()
+        # 为每个 (外销合同, 货币代码) 组合分配颜色
+        contract_colors = {}
+        pair_list = sorted(list(contract_currency_pairs))  # 排序确保一致性
+        for i, (contract, currency) in enumerate(pair_list):
+            if contract == "" and currency == "":
+                contract_colors[(contract, currency)] = "#ffffff"
             else:
-                contract_colors[contract] = colors[i % len(colors)]
+                contract_colors[(contract, currency)] = colors[i % len(colors)]
 
         return contract_colors
 

@@ -5,6 +5,7 @@
 import json
 import os.path
 import shutil
+import requests
 
 from PySide6.QtCore import QObject, Signal, Qt, QUrl
 from PySide6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QPushButton, QLabel, QProgressBar, \
@@ -148,7 +149,8 @@ class PreviewController(QObject):
 
     def _on_login_success(self):
         token = token_manager.token
-        self.view.load_button.setVisible(False)
+        if token:
+            self.view.load_button.setVisible(False)
 
     def set_data(self, data):
         """设置要预览的数据"""
@@ -199,6 +201,31 @@ class PreviewController(QObject):
         if os.path.exists('temp'):
             shutil.rmtree('temp')
 
+        print('准备上传数据:', self.data)
+
+        new_list = self._process_data(self.data)
+        API_URL = 'http://47.100.46.227:5586/api/internal/cost_ident/upload_oa'
+        headers = {
+            "Authorization": f"Bearer {token}"
+        }
+
+        result_data = []
+        try:
+            response = requests.post(API_URL, json=new_list, headers=headers)
+            result = response.json()
+            print('上传接口响应:', result)
+            if result.get('code') == 200:
+                if result.get('error_list') is None:
+                    QMessageBox.information(self.view, "成功", "上传成功")
+                else:
+                    result_data = self._reserve_error_data(self.data, new_list, result.get('error_list', []))
+                    QMessageBox.warning(self.view, "部分成功", f"{result.get('message')}。请查看预览数据后重新上传")
+            else:
+                raise ValueError(f"上传失败: {result.get('message')}")
+        except Exception as e:
+            QMessageBox.critical(self.view, "错误", f"上传请求失败: {e}, 请重新上传")
+            return
+
         try:
             record_path = self.history_manager.save_upload_record(
                 file_name=self.data_manager.file_name,
@@ -207,6 +234,44 @@ class PreviewController(QObject):
             print(f"上传记录已保存: {record_path}")
         except Exception as e:
             print(f"保存上传记录失败: {e}")
+
+        if result_data:
+            self.set_data(result_data)
+            self.data = result_data
+        else:
+            self.data = []
         # 发出最终上传信号
         self.data_manager.set_current_data(self.data)
         self.final_upload_requested.emit()
+
+    def _process_data(self, data):
+        new_list = []
+        group_map = {}
+        current_id = 1
+        for row in data:
+            key = (row.get("外销合同", ""), row.get("货币代码", ""))
+            if key not in group_map:
+                group_map[key] = current_id
+                current_id += 1
+            new_row = {"split_id": group_map[key], 'wxht': row.get("外销合同", ""), 'skdw': row.get("船代公司", ""),
+                       'fymc': row.get("费用名称", ""), 'bb': row.get("货币代码", ""), 'je': float(row.get("金额", "")),
+                       'bz': row.get("备注", "")}
+            new_list.append(new_row)
+        return new_list
+
+    def _reserve_error_data(self, old_data, new_data, error_list):
+        result = []
+        for new_row in new_data:
+            if new_row.get("split_id") in error_list:
+                for old_row in old_data:
+                    if (new_row.get("wxht") == old_row.get("外销合同") and
+                            new_row.get("skdw") == old_row.get("船代公司") and
+                            new_row.get("fymc") == old_row.get("费用名称") and
+                            new_row.get("bb") == old_row.get("货币代码") and
+                            float(new_row.get("je", 0)) == float(old_row.get("金额", 0)) and
+                            new_row.get("bz") == old_row.get("备注")):
+                        merged_row = new_row.copy()
+                        merged_row["源文件"] = old_row.get("源文件", "")
+                        result.append(old_row)
+                        break
+        return result

@@ -192,15 +192,18 @@ class MainWindow(QMainWindow):
         data = self.data_manager.current_data
         filename = self.data_manager.file_name
         self.data_manager.set_uploaded_file_name(filename)
-        print(f"最终上传数据: {data}")
+        if data:
+            self.edit_controller.set_data(data)
+            self.preview_controller.set_data(data)
+            self.tab_widget.setCurrentWidget(self.preview_view)
+        else:
+            self.data_manager.set_file_name("")
+            self.edit_controller.set_data([])
+            self.edit_controller.update_filename("暂无文件")
+            self.preview_controller.set_data([])
+            self.tab_widget.setCurrentWidget(self.upload_view)
         # 刷新历史记录
         self.history_controller.refresh_history()
-        self.data_manager.set_current_data([])
-        self.data_manager.set_file_name("")
-        self.edit_controller.set_data([])
-        self.edit_controller.update_filename("暂无文件")
-        self.preview_controller.set_data([])
-        self.tab_widget.setCurrentWidget(self.upload_view)
 
     def _on_back_to_edit_requested(self):
         """处理返回编辑请求"""

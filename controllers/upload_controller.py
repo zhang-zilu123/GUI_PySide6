@@ -71,18 +71,15 @@ class ExtractDataWorker(QThread):
             file_name = path_parts[output_index + 1]
             md_path = os.path.join(local_md_dir, f"{file_name}.corrected.md")
             temp = extract_info_from_md(md_path)
-            info_dict = {
-                "费用明细": info_dict.get("费用明细", []) + json.loads(temp).get("费用明细", [])
-            }
+            info_dict[file_name] = json.loads(temp).get("费用明细", [])
 
-        # 测试数据
         # info_dict = {
-        #     "费用明细": [
+        #     "746账单": [
         #         {
         #             "外销合同": "DJSCTAO250000746",
         #             "船代公司": "青岛林沃供应链管理有限公司",
         #             "费用名称": "海运费",
-        #             "货币代码": "USD",
+        #             "货币代码": "CNY",
         #             "金额": "0.00",
         #             "备注": ""
         #         },
@@ -165,6 +162,16 @@ class ExtractDataWorker(QThread):
         #             "货币代码": "CNY",
         #             "金额": "100.00",
         #             "备注": ""
+        #         }
+        #     ],
+        #     "G25RU01070-4A费用明细": [
+        #         {
+        #             "外销合同": "NGBL861447",
+        #             "船代公司": "美集物流运输(中国)有限公司宁波分公司",
+        #             "费用名称": "VGM管理费",
+        #             "货币代码": "CNY",
+        #             "金额": "83.59",
+        #             "备注": ""
         #         },
         #         {
         #             "外销合同": "NGBL861447",
@@ -172,7 +179,7 @@ class ExtractDataWorker(QThread):
         #             "费用名称": "仓库内装费",
         #             "货币代码": "CNY",
         #             "金额": "1998.98",
-        #             "备注": "横街"
+        #             "备注": ""
         #         },
         #         {
         #             "外销合同": "NGBL861447",
@@ -225,7 +232,7 @@ class ExtractDataWorker(QThread):
         #         {
         #             "外销合同": "NGBL861447",
         #             "船代公司": "美集物流运输(中国)有限公司宁波分公司",
-        #             "费用名称": "港全费",
+        #             "费用名称": "港口安全费",
         #             "货币代码": "CNY",
         #             "金额": "36.35",
         #             "备注": ""
@@ -241,7 +248,7 @@ class ExtractDataWorker(QThread):
         #         {
         #             "外销合同": "NGBL861447",
         #             "船代公司": "美集物流运输(中国)有限公司宁波分公司",
-        #             "费用名称": "电子装箱单录入费 证操",
+        #             "费用名称": "电子装箱单录入费",
         #             "货币代码": "CNY",
         #             "金额": "10.00",
         #             "备注": ""
@@ -249,7 +256,7 @@ class ExtractDataWorker(QThread):
         #         {
         #             "外销合同": "NGBL861447",
         #             "船代公司": "美集物流运输(中国)有限公司宁波分公司",
-        #             "费用名称": "综合舱单费",
+        #             "费用名称": "码头单证操作费",
         #             "货币代码": "CNY",
         #             "金额": "36.35",
         #             "备注": ""
@@ -257,9 +264,17 @@ class ExtractDataWorker(QThread):
         #         {
         #             "外销合同": "NGBL861447",
         #             "船代公司": "美集物流运输(中国)有限公司宁波分公司",
-        #             "费用名称": "船公司放箱条形码费",
+        #             "费用名称": "综合舱单费",
         #             "货币代码": "CNY",
         #             "金额": "25.00",
+        #             "备注": ""
+        #         },
+        #         {
+        #             "外销合同": "NGBL861447",
+        #             "船代公司": "美集物流运输(中国)有限公司宁波分公司",
+        #             "费用名称": "船公司放箱条形码费",
+        #             "货币代码": "CNY",
+        #             "金额": "10.00",
         #             "备注": ""
         #         },
         #         {
@@ -269,121 +284,117 @@ class ExtractDataWorker(QThread):
         #             "货币代码": "CNY",
         #             "金额": "36.35",
         #             "备注": ""
-        #         },
+        #         }
+        #     ],
+        #     "G25RU03088费用明细": [
         #         {
-        #             "外销合同": "G25RU03088",
-        #             "船代公司": "马银宁宁东",
+        #             "外销合同": "NPO1929930",
+        #             "船代公司": "NINGBO ROYAL UNION CO LTD",
         #             "费用名称": "柜仓储",
         #             "货币代码": "CNY",
         #             "金额": "50.00",
         #             "备注": ""
         #         },
         #         {
-        #             "外销合同": "G25RU03088",
-        #             "船代公司": "马银宁宁东",
-        #             "费用名称": "电费",
+        #             "外销合同": "NPO1929930",
+        #             "船代公司": "NINGBO ROYAL UNION CO LTD",
+        #             "费用名称": "电 费",
         #             "货币代码": "CNY",
         #             "金额": "10.00",
         #             "备注": ""
         #         },
         #         {
-        #             "外销合同": "G25RU03088",
-        #             "船代公司": "马银宁宁东",
-        #             "费用名称": "设备务费",
+        #             "外销合同": "NPO1929930",
+        #             "船代公司": "NINGBO ROYAL UNION CO LTD",
+        #             "费用名称": "设备 务费",
         #             "货币代码": "CNY",
         #             "金额": "100.00",
         #             "备注": ""
         #         },
         #         {
-        #             "外销合同": "G25RU03088",
-        #             "船代公司": "马银宁宁东",
+        #             "外销合同": "NPO1929930",
+        #             "船代公司": "NINGBO ROYAL UNION CO LTD",
         #             "费用名称": "设 费",
         #             "货币代码": "CNY",
         #             "金额": "12.00",
         #             "备注": ""
         #         },
         #         {
-        #             "外销合同": "G25RU03088",
-        #             "船代公司": "马银宁宁东",
-        #             "费用名称": "Terminal Handling Charge -",
+        #             "外销合同": "NPO1929930",
+        #             "船代公司": "NINGBO ROYAL UNION CO LTD",
+        #             "费用名称": "Terminal Handling Charge - Origin",
         #             "货币代码": "CNY",
         #             "金额": "856.00",
         #             "备注": ""
         #         },
         #         {
-        #             "外销合同": "G25RU03088",
-        #             "船代公司": "马银宁宁东",
-        #             "费用名称": "运",
+        #             "外销合同": "NPO1929930",
+        #             "船代公司": "NINGBO ROYAL UNION CO LTD",
+        #             "费用名称": "运 费",
         #             "货币代码": "CNY",
         #             "金额": "200.00",
         #             "备注": ""
         #         },
         #         {
-        #             "外销合同": "G25RU03088",
-        #             "船代公司": "马银宁宁东",
-        #             "费用名称": "费",
+        #             "外销合同": "NPO1929930",
+        #             "船代公司": "NINGBO ROYAL UNION CO LTD",
+        #             "费用名称": "CY Monitoring 费",
         #             "货币代码": "CNY",
         #             "金额": "400.00",
         #             "备注": ""
         #         },
         #         {
-        #             "外销合同": "G25RU03088",
-        #             "船代公司": "马银宁宁东",
-        #             "费用名称": "CY Monitoring 费",
-        #             "货币代码": "CNY",
-        #             "金额": "34.00",
-        #             "备注": ""
-        #         },
-        #         {
-        #             "外销合同": "G25RU03088",
-        #             "船代公司": "马银宁宁东",
-        #             "费用名称": "",
+        #             "外销合同": "NPO1929930",
+        #             "船代公司": "NINGBO ROYAL UNION CO LTD",
+        #             "费用名称": "东 单签单费",
         #             "货币代码": "CNY",
         #             "金额": "450.00",
         #             "备注": ""
         #         },
         #         {
-        #             "外销合同": "G25RU03088",
-        #             "船代公司": "马银宁宁东",
-        #             "费用名称": "东单签单费 务费",
+        #             "外销合同": "NPO1929930",
+        #             "船代公司": "NINGBO ROYAL UNION CO LTD",
+        #             "费用名称": "务费",
         #             "货币代码": "CNY",
         #             "金额": "40.00",
         #             "备注": ""
         #         },
         #         {
-        #             "外销合同": "G25RU03088",
-        #             "船代公司": "马银宁宁东",
+        #             "外销合同": "NPO1929930",
+        #             "船代公司": "NINGBO ROYAL UNION CO LTD",
         #             "费用名称": "订舱费",
         #             "货币代码": "CNY",
         #             "金额": "144.00",
         #             "备注": ""
         #         },
         #         {
-        #             "外销合同": "G25RU03088",
-        #             "船代公司": "马银宁宁东",
-        #             "费用名称": "费费",
+        #             "外销合同": "NPO1929930",
+        #             "船代公司": "NINGBO ROYAL UNION CO LTD",
+        #             "费用名称": "费",
         #             "货币代码": "CNY",
         #             "金额": "50.00",
         #             "备注": ""
         #         },
         #         {
-        #             "外销合同": "G25RU03088",
-        #             "船代公司": "马银宁宁东",
+        #             "外销合同": "NPO1929930",
+        #             "船代公司": "NINGBO ROYAL UNION CO LTD",
         #             "费用名称": "验证总传输费",
         #             "货币代码": "CNY",
         #             "金额": "120.00",
         #             "备注": ""
         #         },
         #         {
-        #             "外销合同": "G25RU03088",
-        #             "船代公司": "马银宁宁东",
+        #             "外销合同": "NPO1929930",
+        #             "船代公司": "NINGBO ROYAL UNION CO LTD",
         #             "费用名称": "扫费",
         #             "货币代码": "CNY",
         #             "金额": "5.00",
         #             "备注": ""
-        #         },
+        #         }
+        #     ],
+        #     "G25RU05039费用明细": [
         #         {
-        #             "外销合同": "G25RU05039",
+        #             "外销合同": "742N004924NB0",
         #             "船代公司": "Century Distribution Systems (Shenzhen) Ltd-Ningbo Branch",
         #             "费用名称": "DOCUMENTATION FEE CFS/CFS (FCR)",
         #             "货币代码": "CNY",
@@ -391,7 +402,7 @@ class ExtractDataWorker(QThread):
         #             "备注": ""
         #         },
         #         {
-        #             "外销合同": "G25RU05039",
+        #             "外销合同": "742N004924NB0",
         #             "船代公司": "Century Distribution Systems (Shenzhen) Ltd-Ningbo Branch",
         #             "费用名称": "THC PRO-RATE (CBM)",
         #             "货币代码": "CNY",
@@ -399,7 +410,7 @@ class ExtractDataWorker(QThread):
         #             "备注": ""
         #         },
         #         {
-        #             "外销合同": "G25RU05039",
+        #             "外销合同": "742N004924NB0",
         #             "船代公司": "Century Distribution Systems (Shenzhen) Ltd-Ningbo Branch",
         #             "费用名称": "CUSTOMS CLEARANCE/DECLARATION (EXPORT)",
         #             "货币代码": "CNY",
@@ -407,7 +418,7 @@ class ExtractDataWorker(QThread):
         #             "备注": ""
         #         },
         #         {
-        #             "外销合同": "G25RU05039",
+        #             "外销合同": "742N004924NB0",
         #             "船代公司": "Century Distribution Systems (Shenzhen) Ltd-Ningbo Branch",
         #             "费用名称": "VGM SUBMISSION/FILING FEE (CBM)",
         #             "货币代码": "CNY",
@@ -415,7 +426,7 @@ class ExtractDataWorker(QThread):
         #             "备注": ""
         #         },
         #         {
-        #             "外销合同": "G25RU05039",
+        #             "外销合同": "742N004924NB0",
         #             "船代公司": "Century Distribution Systems (Shenzhen) Ltd-Ningbo Branch",
         #             "费用名称": "TRUCKING",
         #             "货币代码": "CNY",
@@ -423,15 +434,26 @@ class ExtractDataWorker(QThread):
         #             "备注": ""
         #         },
         #         {
-        #             "外销合同": "G25RU05039",
+        #             "外销合同": "742N004924NB0",
         #             "船代公司": "Century Distribution Systems (Shenzhen) Ltd-Ningbo Branch",
         #             "费用名称": "CFS RECEIVING CHARGE (CBM)",
         #             "货币代码": "CNY",
         #             "金额": "816.90",
         #             "备注": ""
+        #         },
+        #         {
+        #             "外销合同": "742N004924NB0",
+        #             "船代公司": "Century Distribution Systems (Shenzhen) Ltd-Ningbo Branch",
+        #             "费用名称": "CFS RECEIVING CHARGE (CBM)",
+        #             "货币代码": "USD",
+        #             "金额": "816.90",
+        #             "备注": ""
         #         }
         #     ]
         # }
+
+        print('完成PDF文件解析', info_dict)
+
         if isinstance(info_dict, str):
             try:
                 info_dict = json.loads(info_dict)
@@ -449,37 +471,13 @@ class ExtractDataWorker(QThread):
     def _process_extracted_data(self, info_dict, file_paths):
         """处理提取的数据"""
         display_data = []
-        if "费用明细" in info_dict and isinstance(info_dict["费用明细"], list):
-            # 处理每个费用条目
-            for entry_detail in info_dict["费用明细"]:
-                entry_info = {field: "" for field in EXTRA_FIELD}
-
-                # 直接从条目中提取各字段
-                entry_info["外销合同"] = entry_detail.get("外销合同", "")
-                entry_info["船代公司"] = entry_detail.get("船代公司", "")
-                entry_info["费用名称"] = entry_detail.get("费用名称", "")
-                entry_info["货币代码"] = entry_detail.get("货币代码", "")
-                entry_info["金额"] = entry_detail.get("金额", "")
-                entry_info["备注"] = entry_detail.get("备注", "")
-                display_data.append(entry_info)
-        # 为每个条目分配源文件
-        self._assign_source_files(display_data, file_paths)
-        print(f"最终返回数据: {len(display_data)} 条记录")
+        index = 0
+        for file_name, records in info_dict.items():
+            for record in records:
+                record['源文件'] = file_paths[index]
+                display_data.append(record)
+            index += 1
         return display_data
-
-    def _assign_source_files(self, display_data, file_paths):
-        """为数据条目分配源文件"""
-        file_index = 0
-        contract_to_file = {}
-        for entry in display_data:
-            contract_no = entry["外销合同"]
-            if contract_no not in contract_to_file:  # 第一次遇到这个合同号
-                if file_index < len(file_paths):
-                    contract_to_file[contract_no] = file_paths[file_index]
-                    file_index += 1
-                else:
-                    contract_to_file[contract_no] = ""  # 文件不够用，给空
-            entry["源文件"] = contract_to_file[contract_no]
 
 
 class UploadController(QObject):
