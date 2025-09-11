@@ -3,6 +3,10 @@ from random import choice
 import os
 import time
 from datetime import datetime
+import sys
+from pathlib import Path
+
+sys.path.append(str(Path(__file__).parent.parent))
 
 from data.temp_data import get_data
 
@@ -18,7 +22,7 @@ dash_keys = [
 
 
 def translate_json(content) -> str:
-    """从单个 markdown 文件中提取信息"""
+    """从json文件中翻译船代公司"""
 
     client = OpenAI(
         api_key=choice(dash_keys),
@@ -26,7 +30,8 @@ def translate_json(content) -> str:
     )
     response = client.chat.completions.create(
         # model="qwen-max",
-        model="qwen-plus",
+        # model="qwen-plus",
+        model="qwen-flash",
 
         messages=[
             {'role': 'system', 'content': 'You are a helpful assistant designed to output JSON.'},
@@ -90,7 +95,7 @@ def translate_json(content) -> str:
 
 # 输出结构要求
 1. 输出为一个 JSON 对象
-2. JSON结构保持不变，其值为数组
+2. JSON结构保持不变
 3. 数组内的每个对象必须包含以下字段：
    - `外销合同`（保持原文）
    - `船代公司`（翻译成规范中文名称）
@@ -101,35 +106,54 @@ def translate_json(content) -> str:
 
 # 示例1
 输入示例（json 片段）：
-{{
+```json
+{[{
+"外销合同": "742N004924NB0",
+"船代公司": "Century Distribution Systems (Shenzhen) Ltd-Ningbo Branch",
+"费用名称": "柜子费",
+"货币代码": "CNY",
+"金额": "160.00",
+"备注": ""
+},
+{
 "外销合同": "742N004924NB0",
 "船代公司": "Century Distribution Systems (Shenzhen) Ltd-Ningbo Branch",
 "费用名称": "CUSTOMS CLEARANCE/DECLARATION (EXPORT)",
 "货币代码": "CNY",
 "金额": "130.00",
 "备注": ""
-}}
+}]}
+```
 
 输出示例（JSON）：
 
 ```json
-{ {
+{ [{
+                "外销合同": "742N004924NB0",
+                "船代公司": "世纪冠航国际货运代理（深圳）有限公司宁波分公司",
+                "费用名称": "柜子费",
+                "货币代码": "CNY",
+                "金额": "160.00",
+                "备注": ""
+            },
+            {
                 "外销合同": "742N004924NB0",
                 "船代公司": "世纪冠航国际货运代理（深圳）有限公司宁波分公司",
                 "费用名称": "CUSTOMS CLEARANCE/DECLARATION (EXPORT)",
                 "货币代码": "CNY",
                 "金额": "130.00",
                 "备注": ""
-            } }
+            }
+        ] }
 ```
 
 # 开始处理
 ## 文本内容:
 {content}
-"""
-             },
-        ],
 
+"""
+            },
+        ],
         response_format={"type": "json_object"}
     )
 
