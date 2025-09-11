@@ -1,7 +1,10 @@
 from openai import OpenAI
 from random import choice
 import os
-import json
+import time
+from datetime import datetime
+
+from data.temp_data import get_data
 
 os.environ["DASHSCOPE_API_KEY1"] = "sk-ca1bef1139754026b86788af0dbbbbd4"
 os.environ["DASHSCOPE_API_KEY2"] = "sk-381d3df1c3ee4623bb9a1b9c767f7b5e"
@@ -14,7 +17,7 @@ dash_keys = [
 ]
 
 
-def translate_json(content: str) -> str:
+def translate_json(content) -> str:
     """从单个 markdown 文件中提取信息"""
 
     client = OpenAI(
@@ -22,7 +25,8 @@ def translate_json(content: str) -> str:
         base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
     )
     response = client.chat.completions.create(
-        model="qwen-max",
+        # model="qwen-max",
+        model="qwen-plus",
 
         messages=[
             {'role': 'system', 'content': 'You are a helpful assistant designed to output JSON.'},
@@ -86,7 +90,7 @@ def translate_json(content: str) -> str:
 
 # 输出结构要求
 1. 输出为一个 JSON 对象
-2. 顶层键为 `"费用明细"`，其值为数组
+2. JSON结构保持不变，其值为数组
 3. 数组内的每个对象必须包含以下字段：
    - `外销合同`（保持原文）
    - `船代公司`（翻译成规范中文名称）
@@ -98,28 +102,25 @@ def translate_json(content: str) -> str:
 # 示例1
 输入示例（json 片段）：
 {{
-"外销合同": "DJSCTAO250000746",
-"船代公司": "NINGBO ROYAL UNION CO LTD",
-"费用名称": "海运费",
+"外销合同": "742N004924NB0",
+"船代公司": "Century Distribution Systems (Shenzhen) Ltd-Ningbo Branch",
+"费用名称": "CUSTOMS CLEARANCE/DECLARATION (EXPORT)",
 "货币代码": "CNY",
-"金额": "0.00",
+"金额": "130.00",
 "备注": ""
 }}
 
 输出示例（JSON）：
 
 ```json
-{
-{
-"外销合同": "DJSCTAO250000746",
-"船代公司": "马士基物流（上海）有限公司宁波分公司",
-"费用名称": "海运费",
-"货币代码": "CNY",
-"金额": "0.00",
-"备注": ""
-}
-
-}
+{ {
+                "外销合同": "742N004924NB0",
+                "船代公司": "世纪冠航国际货运代理（深圳）有限公司宁波分公司",
+                "费用名称": "CUSTOMS CLEARANCE/DECLARATION (EXPORT)",
+                "货币代码": "CNY",
+                "金额": "130.00",
+                "备注": ""
+            } }
 ```
 
 # 开始处理
@@ -136,18 +137,22 @@ def translate_json(content: str) -> str:
 
 
 if __name__ == "__main__":
-    content = """
-    {
-"外销合同": "DJSCTAO250000746",
-"船代公司": "GOURMET HOME PRODUCTS LLC",
-"费用名称": "海运费",
-"货币代码": "CNY",
-"金额": "0.00",
-"备注": ""
-}
-
-
-    """
+    #     content = """
+    #     {
+    # "外销合同": "DJSCTAO250000746",
+    # "船代公司": "GOURMET HOME PRODUCTS LLC",
+    # "费用名称": "海运费",
+    # "货币代码": "CNY",
+    # "金额": "0.00",
+    # "备注": ""
+    # }
+    #
+    #
+    #     """
+    start_time = time.time()
+    start_datetime = datetime.now()
+    content = get_data()
     print(translate_json(content))
-
-
+    end_time = time.time()
+    end_datetime = datetime.now()
+    print(f"总耗时: {end_time - start_time} 秒")

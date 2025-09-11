@@ -8,6 +8,7 @@ import shutil
 import json
 from PySide6.QtWidgets import QFileDialog, QMessageBox, QHBoxLayout, QPushButton
 from PySide6.QtCore import QObject, Signal, QThread, Qt
+import time
 
 from pathlib import Path
 
@@ -16,6 +17,7 @@ from utils.common import get_filename_list
 from utils.mineru_parse import parse_doc
 from utils.model_md_to_json import extract_info_from_md
 from config.config import EXTRA_FIELD, API_KEY
+from utils.model_translate import translate_json
 from utils.table_corrector_multi import TableCorrector
 
 
@@ -57,14 +59,18 @@ class ExtractDataWorker(QThread):
         os.environ['MINERU_MODEL_SOURCE'] = 'local'
         print(f'开始解析PDF文件: {file_paths}')
         # 解析pdf
+        # start_time = time.time()
         # local_md_dirs = parse_doc(path_list=file_paths, output_dir="./output", backend="pipeline")
-        local_md_dirs = ['./output\\746账单\\auto', './output\\G25RU01070-4A费用明细\\auto',
-                         './output\\G25RU03088费用明细\\auto', './output\\G25RU05039费用明细\\auto']
+        # end_time = time.time()
+        # print(f"PDF解析完成，耗时 {end_time - start_time:.2f} 秒")
+        # local_md_dirs = ['./output\\746账单\\auto', './output\\G25RU01070-4A费用明细\\auto',
+        #                  './output\\G25RU03088费用明细\\auto', './output\\G25RU05039费用明细\\auto']
 
         # OUTPUT_DIR = Path(__file__).resolve().parents[1] / "output"
         # corrector = TableCorrector(API_KEY)
         # corrector.process_directory(OUTPUT_DIR)
-        #
+
+        # start_time = time.time()
         # info_dict = {}
         # for local_md_dir in local_md_dirs:
         #     path_parts = local_md_dir.replace('\\', '/').split('/')
@@ -73,9 +79,14 @@ class ExtractDataWorker(QThread):
         #     md_path = os.path.join(local_md_dir, f"{file_name}.corrected.md")
         #     temp = extract_info_from_md(md_path)
         #     info_dict[file_name] = json.loads(temp).get("费用明细", [])
+        # end_time = time.time()
+        # print(f"纠正和提取结构，耗时 {end_time - start_time:.2f} 秒")
 
-        info_dict = get_data()
-
+        start_time = time.time()
+        # info_dict = translate_json(info_dict)
+        info_dict = translate_json(get_data())
+        end_time = time.time()
+        print(f"翻译字段，耗时 {end_time - start_time:.2f} 秒")
         print('完成PDF文件解析', info_dict)
 
         if isinstance(info_dict, str):
