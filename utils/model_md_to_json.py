@@ -33,8 +33,8 @@ def extract_info_from_md(md_file_path: str) -> str:
         base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
     )
     response = client.chat.completions.create(
-        # model="qwen-max",
-        model="qwen-flash",
+        model="qwen-max",
+        # model="qwen-flash",
 
         messages=[
             {'role': 'system', 'content': 'You are a helpful assistant designed to output JSON.'},
