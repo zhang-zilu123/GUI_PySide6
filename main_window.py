@@ -4,7 +4,9 @@
 import json
 import os.path
 
-from PySide6.QtWidgets import QMainWindow, QStatusBar, QMessageBox, QTabWidget
+from PySide6.QtWidgets import (QMainWindow, QStatusBar, QMessageBox, QTabWidget,
+                             QSizePolicy)
+from PySide6.QtCore import Qt
 
 from controllers.history_controller import HistoryController
 from data.data_manager import DataManager
@@ -15,9 +17,7 @@ from views.history_view import HistoryView
 from controllers.upload_controller import UploadController
 from controllers.edit_controller import EditController
 from controllers.preview_controller import PreviewController
-
-
-# from controllers.history_controller import HistoryController
+from styles import StyleManager
 
 
 class MainWindow(QMainWindow):
@@ -35,39 +35,21 @@ class MainWindow(QMainWindow):
         self.setGeometry(100, 100, 700, 500)
         self.resize(1500, 600)
 
+        # 应用基础样式
+        StyleManager.apply_base_style(self)
+
         # 创建标签页部件，用于管理多个界面
         self.tab_widget = QTabWidget()
         self.tab_widget.setTabsClosable(False)  # 禁止关闭标签页
         self.setCentralWidget(self.tab_widget)
 
-        # 设置标签页样式
-        self.tab_widget.setStyleSheet("""
-            QTabWidget::pane {
-                border: none;
-            }
-            QTabBar::tab {
-                background-color: #f5f5f5;
-                padding: 12px 25px;
-                border: 1px solid #ddd;
-                border-bottom: none;
-                border-top-left-radius: 5px;
-                border-top-right-radius: 5px;
-                font-weight: 500;
-                font-size: 14px;
-            }
-            QTabBar::tab:selected {
-                background-color: white;
-                border-bottom: 2px solid #4CAF50;
-                font-weight: bold;
-            }
-            QTabBar::tab:hover {
-                background-color: #e8f5e8;
-            }
-        """)
+        # 应用标签页样式
+        StyleManager.apply_tab_style(self.tab_widget)
 
         # 创建状态栏
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
+        StyleManager.apply_status_bar_style(self.status_bar)
         self.status_bar.showMessage("就绪")
 
         # 存储所有处理完成的文件数据
@@ -97,6 +79,15 @@ class MainWindow(QMainWindow):
         self.tab_widget.addTab(self.preview_view, "预览上传")
         self.tab_widget.addTab(self.history_view, "查看历史上传")
 
+        # 连接界面信号
+        self._connect_signals()
+
+        # 检查临时数据
+        self._check_temp_data()
+
+
+    def _check_temp_data(self):
+        """检查临时数据文件"""
         temp_json_path = os.path.join("temp", "temp_data.json")
         if os.path.exists(temp_json_path):
             with open(temp_json_path, 'r', encoding='utf-8') as f:
@@ -119,9 +110,6 @@ class MainWindow(QMainWindow):
                     print("无法解析临时数据文件，可能已损坏。")
                     self.tab_widget.setCurrentWidget(self.upload_view)
                     QMessageBox.information('提示', '无法解析临时数据文件，可能已损坏。')
-
-        # 连接界面信号
-        self._connect_signals()
 
     def _connect_signals(self):
         """连接各个界面发出的信号"""

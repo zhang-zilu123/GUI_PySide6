@@ -683,16 +683,18 @@ class UploadController(QObject):
     def _create_delete_button(self, file_path):
         """创建删除按钮"""
         delete_button = QPushButton("×")
-        delete_button.setFixedSize(24, 24)
+        delete_button.setFixedSize(20, 20)
         delete_button.setStyleSheet("""
             QPushButton {
-                background-color: #ff4444;
-                color: white;
-                border-radius: 12px;
+                color: #999999;
+                background: transparent;
+                border: none;
+                font-size: 20px;
                 font-weight: bold;
+                padding: 0;
             }
             QPushButton:hover {
-                background-color: #cc0000;
+                color: #ff4d4f;
             }
         """)
         delete_button.setCursor(Qt.PointingHandCursor)
