@@ -14,24 +14,27 @@ def get_filename_list(file_path):
         return []
 
 
-def generate_light_colors(count=50):
+def generate_light_colors(count=50, preset=None):
     """
-    生成指定数量的浅色系颜色
+    生成浅色系颜色，前几个用预设颜色，剩下的自动生成
     """
-    colors = []
-    for i in range(count):
-        # 生成HSL颜色，确保亮度较高（浅色）
-        hue = i / count  # 色相在0-1之间
-        saturation = 0.3 + (i % 3) * 0.1  # 饱和度适中
-        lightness = 0.85 + (i % 2) * 0.05  # 高亮度确保浅色
+    import colorsys
 
-        # 转换为RGB
-        rgb = colorsys.hls_to_rgb(hue, lightness, saturation)
-        # 转换为十六进制
+    if preset is None:
+        preset = [
+            "#E3F2FD", "#E8F5E8", "#FFF3E0", "#F3E5F5", "#E0F2F1",
+            "#FCE4EC", "#F1F8E9", "#EFEBE9", "#FAFAFA", "#E8EAF6"
+        ]
+
+    colors = preset[:count]
+
+    for i in range(max(0, count - len(colors))):
+        hue = 0.33 + (0.66 - 0.33) * (i / (count - len(colors) + 1))  # 蓝绿系
+        saturation = 0.4
+        lightness = 0.9
+        r, g, b = colorsys.hls_to_rgb(hue, lightness, saturation)
         hex_color = "#{:02x}{:02x}{:02x}".format(
-            int(rgb[0] * 255),
-            int(rgb[1] * 255),
-            int(rgb[2] * 255)
+            int(r * 255), int(g * 255), int(b * 255)
         )
         colors.append(hex_color)
 
