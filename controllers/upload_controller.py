@@ -63,8 +63,6 @@ class ExtractDataWorker(QThread):
         local_md_dirs = parse_doc(path_list=file_paths, output_dir="./output", backend="pipeline")
         end_time = time.time()
         print(f"PDF解析完成，耗时 {end_time - start_time:.2f} 秒")
-        # local_md_dirs = ['./output\\746账单\\auto', './output\\G25RU01070-4A费用明细\\auto',
-        #                  './output\\G25RU03088费用明细\\auto', './output\\G25RU05039费用明细\\auto']
 
         OUTPUT_DIR = Path(__file__).resolve().parents[1] / "output"
         corrector = TableCorrector(API_KEY)
@@ -72,6 +70,7 @@ class ExtractDataWorker(QThread):
 
         start_time = time.time()
         info_dict = {}
+        #TODO: 时间优化
         for local_md_dir in local_md_dirs:
             path_parts = local_md_dir.replace('\\', '/').split('/')
             output_index = path_parts.index('output')
@@ -83,12 +82,12 @@ class ExtractDataWorker(QThread):
         print(f"纠正和提取结构，耗时 {end_time - start_time:.2f} 秒")
 
         start_time = time.time()
-        info_dict = translate_json(info_dict)
-        # info_dict = translate_json(get_data())
+        info_dict = translate_json(get_data())
         end_time = time.time()
         print(f"翻译字段，耗时 {end_time - start_time:.2f} 秒")
         print('完成PDF文件解析', info_dict)
 
+        info_dict = get_data()
         if isinstance(info_dict, str):
             try:
                 info_dict = json.loads(info_dict)
@@ -199,7 +198,10 @@ class UploadController(QObject):
         """检查文件是否已经上传"""
         file_name = os.path.basename(file_path)
         uploaded_file_names = self._get_uploaded_file_names()
-        return file_name in uploaded_file_names
+        now_file_names = self._get_now_file_names()
+        if file_name in now_file_names or file_name in uploaded_file_names:
+            return True
+
 
     def _get_uploaded_file_names(self):
         """获取已上传的文件名列表"""
@@ -207,6 +209,12 @@ class UploadController(QObject):
             return []
         if isinstance(self.data_manager.uploaded_file_name, str):
             return [name.strip() for name in self.data_manager.uploaded_file_name.split(',')]
+        return []
+
+    def _get_now_file_names(self):
+        """获取当前文件名列表"""
+        if isinstance(self.data_manager.file_name, str):
+            return [name.strip() for name in self.data_manager.file_name.split(',')]
         return []
 
     def _show_file_exists_message(self, file_path):
