@@ -70,7 +70,7 @@ class ExtractDataWorker(QThread):
 
         start_time = time.time()
         info_dict = {}
-        #TODO: 时间优化
+        # TODO: 时间优化
         for local_md_dir in local_md_dirs:
             path_parts = local_md_dir.replace('\\', '/').split('/')
             output_index = path_parts.index('output')
@@ -82,35 +82,43 @@ class ExtractDataWorker(QThread):
         print(f"纠正和提取结构，耗时 {end_time - start_time:.2f} 秒")
 
         start_time = time.time()
-        info_dict = translate_json(get_data())
+        # info_dict = translate_json(get_data())
         end_time = time.time()
         print(f"翻译字段，耗时 {end_time - start_time:.2f} 秒")
         print('完成PDF文件解析', info_dict)
 
-        info_dict = get_data()
+        # info_dict = get_data()
         if isinstance(info_dict, str):
             try:
                 info_dict = json.loads(info_dict)
             except json.JSONDecodeError:
                 info_dict = {}
 
-        # print(f"解析md文件: {info_dict}")
-        # if os.path.exists('./output'):
-        #     shutil.rmtree('./output')
-        #     print('删除临时文件夹 ./output')
+        print(f"解析md文件: {info_dict}")
+        if os.path.exists('./output'):
+            shutil.rmtree('./output')
+            print('删除临时文件夹 ./output')
 
         # 构建返回数据
         return self._process_extracted_data(info_dict, file_paths)
 
     def _process_extracted_data(self, info_dict, file_paths):
         """处理提取的数据"""
+        # 建立文件名到完整路径的映射
+        file_name_to_path = {}
+        for file_path in file_paths:
+            file_name = os.path.splitext(os.path.basename(file_path))[0]  # 去掉扩展名
+            file_name_to_path[file_name] = file_path
+
         display_data = []
-        index = 0
         for file_name, records in info_dict.items():
+            # 使用映射查找对应的文件路径
+            source_file = file_name_to_path.get(file_name, "未知文件")
+
             for record in records:
-                record['源文件'] = file_paths[index]
+                record['源文件'] = source_file
                 display_data.append(record)
-            index += 1
+
         return display_data
 
 
@@ -201,7 +209,6 @@ class UploadController(QObject):
         now_file_names = self._get_now_file_names()
         if file_name in now_file_names or file_name in uploaded_file_names:
             return True
-
 
     def _get_uploaded_file_names(self):
         """获取已上传的文件名列表"""
