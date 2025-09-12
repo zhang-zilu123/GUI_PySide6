@@ -209,7 +209,7 @@ class PreviewController(QObject):
             "Authorization": f"Bearer {token}"
         }
 
-        result_data = []
+        error_list = []
         try:
             response = requests.post(API_URL, json=new_list, headers=headers)
             result = response.json()
@@ -218,7 +218,7 @@ class PreviewController(QObject):
                 if result.get('error_list') is None:
                     QMessageBox.information(self.view, "成功", "上传成功")
                 else:
-                    result_data = self._reserve_error_data(self.data, new_list, result.get('error_list', []))
+                    error_list = result.get('error_list')
                     QMessageBox.warning(self.view, "部分成功", f"{result.get('message')}。请查看预览数据后重新上传")
             else:
                 raise ValueError(f"上传失败: {result.get('message')}")
@@ -226,20 +226,27 @@ class PreviewController(QObject):
             QMessageBox.critical(self.view, "错误", f"上传请求失败: {e}, 请重新上传")
             return
 
+        save_data = self.data
+        if error_list:
+            # 保留上传失败的数据
+            result_data = self._reserve_error_data(self.data, new_list, error_list)
+            save_data = self._mark_error(self.data, result)
+            self.set_data(result_data)
+            self.data = result_data
+        else:
+            for item in save_data:
+                item["is_error"] = False
+            self.data = []
+
         try:
             record_path = self.history_manager.save_upload_record(
                 file_name=self.data_manager.file_name,
-                data=self.data,
+                data=save_data,
             )
             print(f"上传记录已保存: {record_path}")
         except Exception as e:
             print(f"保存上传记录失败: {e}")
 
-        if result_data:
-            self.set_data(result_data)
-            self.data = result_data
-        else:
-            self.data = []
         # 发出最终上传信号
         self.data_manager.set_current_data(self.data)
         self.final_upload_requested.emit()
@@ -274,4 +281,16 @@ class PreviewController(QObject):
                         merged_row["源文件"] = old_row.get("源文件", "")
                         result.append(old_row)
                         break
+        return result
+
+    def _mark_error(self, A, B):
+        result = []
+        B_set = [tuple(sorted(item.items())) for item in B]
+        for a in A:
+            a_copy = a.copy()
+            if tuple(sorted(a.items())) in B_set:
+                a_copy["is_error"] = True
+            else:
+                a_copy["is_error"] = False
+            result.append(a_copy)
         return result
