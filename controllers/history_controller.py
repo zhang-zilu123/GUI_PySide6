@@ -1,7 +1,8 @@
 from PySide6.QtWidgets import QListWidgetItem, QTableWidgetItem
 from PySide6.QtCore import Qt, QObject
+from PySide6.QtGui import QColor
 from data.history_manager import HistoryManager
-from config.config import SUBMIT_FIELD
+from config.config import HISTORY_FIELD
 
 
 class HistoryController(QObject):
@@ -46,7 +47,7 @@ class HistoryController(QObject):
         # 更新文件名显示
         if hasattr(self.view, 'file_name_value'):
             self.view.file_name_value.setText(record_detail.get('original_filename', '未知文件'))
-        
+
         # 更新右侧显示
         self._update_data_table(record_detail)
 
@@ -54,23 +55,40 @@ class HistoryController(QObject):
         """更新数据表格显示"""
         data_list = record_detail.get('data', [])
 
+        # 对数据按 is_error 排序，错误项在前
+        sorted_data = sorted(data_list, key=lambda x: not bool(x.get("is_error", False)))
+
         # 设置表格
-        self.view.data_table.setRowCount(len(data_list))
-        self.view.data_table.setColumnCount(len(SUBMIT_FIELD))
-        self.view.data_table.setHorizontalHeaderLabels(SUBMIT_FIELD)
+        self.view.data_table.setRowCount(len(sorted_data))
+        self.view.data_table.setColumnCount(len(HISTORY_FIELD))
+        self.view.data_table.setHorizontalHeaderLabels(HISTORY_FIELD)
 
         # 填充数据
-        for row, item in enumerate(data_list):
-            for col, field in enumerate(SUBMIT_FIELD):
+        for row, item in enumerate(sorted_data):
+            is_error = item.get("is_error", False)
+
+            for col, field in enumerate(HISTORY_FIELD):
                 # 根据字段名映射到数据
                 field_mapping = {
                     "外销合同": "外销合同",
-                    "船代公司": "船代公司", 
+                    "船代公司": "船代公司",
                     "费用名称": "费用名称",
                     "货币代码": "货币代码",
                     "金额": "金额",
-                    "备注": "备注"
+                    "备注": "备注",
+                    "上传情况": "is_error"
                 }
-                
+
                 value = item.get(field_mapping.get(field, field), "")
-                self.view.data_table.setItem(row, col, QTableWidgetItem(str(value)))
+
+                # 如果是 is_error 字段，转换布尔值为中文
+                if field == "上传情况" and isinstance(value, bool):
+                    value = "失败" if value else "成功"
+
+                table_item = QTableWidgetItem(str(value))
+
+                # 如果是错误行，设置红色背景
+                if is_error:
+                    table_item.setBackground(QColor("#ffebee"))  # 浅红色背景
+
+                self.view.data_table.setItem(row, col, table_item)

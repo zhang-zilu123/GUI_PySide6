@@ -51,19 +51,23 @@ class HistoryManager:
 
         return record_path
 
-    def load_upload_records(self) -> List[Dict]:
+    def load_upload_records(self, include_data: bool = False) -> List[Dict]:
         """
-        加载所有上传记录的列表（不包含具体数据）
-        
+        加载所有上传记录（默认不包含具体 data）。如果 include_data=True，
+        会把每个记录的 data 中 is_in_B == True 的项排序到最前面并随 record 一起返回。
+
+        Args:
+            include_data: 是否把每个记录的 data 一并加载并排序（is_in_B True 放前）
+
         Returns:
-            List[Dict]: 记录列表，每个元素包含基本信息
+            List[Dict]: 记录列表，每个元素包含基本信息，若 include_data=True 则额外包含排序后的 "data"
         """
         records = []
 
         if not os.path.exists(self.data_dir):
             return records
 
-        # 遍历data目录下的所有JSON文件
+        # 遍历 data 目录下的所有 JSON 文件
         for filename in os.listdir(self.data_dir):
             if filename.startswith("upload_") and filename.endswith(".json"):
                 file_path = os.path.join(self.data_dir, filename)

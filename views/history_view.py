@@ -3,8 +3,8 @@
 用户在此界面查看已上传的文件和历史数据记录
 """
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-                             QListWidget, QTableWidget, QAbstractItemView,
-                             QHeaderView, QApplication, QSplitter)
+                               QListWidget, QTableWidget, QAbstractItemView,
+                               QHeaderView, QApplication, QSplitter)
 from PySide6.QtCore import Qt
 from styles import StyleManager
 import sys
@@ -101,7 +101,7 @@ class HistoryView(QWidget):
 
         # 数据表格
         self.data_table = QTableWidget()
-        self.data_table.setColumnCount(6)  # 修改为6列以匹配SUBMIT_FIELD
+        self.data_table.setColumnCount(7)
         # 默认设置为不可编辑
         self.data_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
 
