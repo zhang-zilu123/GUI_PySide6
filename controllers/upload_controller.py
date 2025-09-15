@@ -81,10 +81,6 @@ class ExtractDataWorker(QThread):
         end_time = time.time()
         print(f"纠正和提取结构，耗时 {end_time - start_time:.2f} 秒")
 
-        start_time = time.time()
-        # info_dict = translate_json(get_data())
-        end_time = time.time()
-        print(f"翻译字段，耗时 {end_time - start_time:.2f} 秒")
         print('完成PDF文件解析', info_dict)
 
         # info_dict = get_data()
