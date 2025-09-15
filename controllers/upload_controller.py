@@ -55,34 +55,20 @@ class ExtractDataWorker(QThread):
 
     def _extract_data_from_pdf(self, file_paths):
         """从PDF文件中提取数据"""
-        # 这里应该是实际的PDF解析逻辑
         os.environ['MINERU_MODEL_SOURCE'] = 'local'
         print(f'开始解析PDF文件: {file_paths}')
         # 解析pdf
         start_time = time.time()
-        local_md_dirs = parse_doc(path_list=file_paths, output_dir="./output", backend="pipeline")
+        # parse_doc(path_list=file_paths, output_dir="./output", backend="pipeline")
         end_time = time.time()
         print(f"PDF解析完成，耗时 {end_time - start_time:.2f} 秒")
 
         OUTPUT_DIR = Path(__file__).resolve().parents[1] / "output"
         corrector = TableCorrector(API_KEY)
-        corrector.process_directory(OUTPUT_DIR)
-
-        start_time = time.time()
-        info_dict = {}
-        # TODO: 时间优化
-        for local_md_dir in local_md_dirs:
-            path_parts = local_md_dir.replace('\\', '/').split('/')
-            output_index = path_parts.index('output')
-            file_name = path_parts[output_index + 1]
-            md_path = os.path.join(local_md_dir, f"{file_name}.corrected.md")
-            temp = extract_info_from_md(md_path)
-            info_dict[file_name] = json.loads(temp).get("费用明细", [])
-        end_time = time.time()
-        print(f"纠正和提取结构，耗时 {end_time - start_time:.2f} 秒")
+        result = corrector.process_directory(OUTPUT_DIR)
+        info_dict = result.get("info_dict", {})
 
         print('完成PDF文件解析', info_dict)
-
         # info_dict = get_data()
         if isinstance(info_dict, str):
             try:

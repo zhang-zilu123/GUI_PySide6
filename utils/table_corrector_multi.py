@@ -4,21 +4,18 @@
 使用精确匹配算法建立表格-图片映射关系
 """
 
-import os
 import json
 import re
 import base64
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed  
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Any
 
-from mineru.utils.language import current_dir
 from openai import OpenAI
-from PIL import Image
-from html.parser import HTMLParser
-import html
 from difflib import SequenceMatcher
 from config.config import CORRECTION_PROMPT
+from utils.model_md_to_json import extract_info_from_md
 
 
 class TableExtractor:
@@ -166,6 +163,7 @@ class TableCorrector:
 
     def __init__(self, api_key: str):
         self.api_key = api_key
+        self.executor = ThreadPoolExecutor(max_workers=4)
 
     def _extract_html_from_block(self, block: Dict) -> Optional[str]:
         """从JSON块中深度搜索并提取HTML内容"""
@@ -467,8 +465,19 @@ class TableCorrector:
 
         return table_report
 
+    def _extract_info_async(self, corrected_file: str) -> List[Dict]:
+        """异步提取结构化数据"""
+        try:
+            temp = extract_info_from_md(corrected_file)
+            extracted_info = json.loads(temp).get("费用明细", [])
+            print(f"异步提取完成: {corrected_file}, 条数: {len(extracted_info)}")
+            return extracted_info
+        except Exception as e:
+            print(f"异步提取失败: {corrected_file}, 错误: {e}")
+            return []
+
     def _process_single_folder(self, folder_path: Path) -> Dict[str, Any]:
-        """处理单个票据文件夹"""
+        """同步处理单个票据文件夹"""
         folder_name = folder_path.name
         auto_dir = folder_path / "auto"
 
@@ -482,7 +491,8 @@ class TableCorrector:
             "table_reports": [],
             "overall_errors": [],
             "timing": {},
-            "model_version": "qwen-vl-max"
+            "model_version": "qwen-vl-max",
+            "extracted_info": []
         }
 
         start_time = time.time()
@@ -575,6 +585,10 @@ class TableCorrector:
                 report["output_file"] = str(corrected_file)
                 print(f"已生成纠错文件: {corrected_file.name}")
 
+                # 同步提取结构化数据
+                extracted_info = self._extract_info_async(str(corrected_file))
+                report["extracted_info"].extend(extracted_info)
+
             # 生成汇总统计
             total_calculated_sum = sum(tr.get("calculated_sum", 0) for tr in report["table_reports"])
 
@@ -595,50 +609,50 @@ class TableCorrector:
         return report
 
     def process_directory(self, output_dir: Path) -> Dict[str, Any]:
-        """处理整个输出目录"""
+        """异步处理整个输出目录"""
         results = {
             "processed_folders": [],
             "success_count": 0,
             "error_count": 0,
             "total_tables": 0,
             "successful_tables": 0,
-            "total_time": 0
+            "total_time": 0,
+            "info_dict": {}
         }
 
         start_time = time.time()
-
         print(f"开始批量处理目录: {output_dir}")
+        # 使用线程池并行处理子目录
+        futures = []
+        with ThreadPoolExecutor(max_workers=4) as executor:  # 设置最大并行线程数
+            for subdir in output_dir.iterdir():
+                if not subdir.is_dir():
+                    continue
+                # 跳过非票据目录
+                auto_dir = subdir / "auto"
+                if not auto_dir.exists():
+                    continue
 
-        # 遍历所有子目录
-        for subdir in output_dir.iterdir():
-            if not subdir.is_dir():
-                continue
+                # 提交异步任务
+                futures.append(executor.submit(self._process_single_folder, subdir))
 
-            # 跳过非票据目录（如correction_summary_multi.json所在的根目录）
-            auto_dir = subdir / "auto"
-            if not auto_dir.exists():
-                continue
+            # 收集结果
+            for future in as_completed(futures):
+                folder_report = future.result()
+                results["processed_folders"].append(folder_report)
 
-            # 处理单个文件夹
-            folder_report = self._process_single_folder(subdir)
-            results["processed_folders"].append(folder_report)
+                # 统计
+                results["total_tables"] += folder_report.get("table_count", 0)
+                results["successful_tables"] += folder_report.get("tables_success", 0)
 
-            # 统计
-            results["total_tables"] += folder_report.get("table_count", 0)
-            results["successful_tables"] += folder_report.get("tables_success", 0)
+                if folder_report["success"]:
+                    results["success_count"] += 1
+                else:
+                    results["error_count"] += 1
 
-            if folder_report["success"]:
-                results["success_count"] += 1
-            else:
-                results["error_count"] += 1
-
-            # 保存单个文件夹的报告
-            auto_dir = subdir / "auto"
-            md_files = [f for f in auto_dir.glob("*.md") if not f.name.endswith('.corrected.md')]
-            if md_files:
-                report_file = auto_dir / f"{md_files[0].stem}.report.json"
-                with open(report_file, 'w', encoding='utf-8') as f:
-                    json.dump(folder_report, f, ensure_ascii=False, indent=2)
+                # 合并提取的结构化数据
+                if "extracted_info" in folder_report:
+                    results["info_dict"][folder_report["folder_name"]] = folder_report["extracted_info"]
 
         results["total_time"] = time.time() - start_time
 
