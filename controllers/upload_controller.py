@@ -59,7 +59,7 @@ class ExtractDataWorker(QThread):
         print(f'开始解析PDF文件: {file_paths}')
         # 解析pdf
         start_time = time.time()
-        # parse_doc(path_list=file_paths, output_dir="./output", backend="pipeline")
+        parse_doc(path_list=file_paths, output_dir="./output", backend="pipeline")
         end_time = time.time()
         print(f"PDF解析完成，耗时 {end_time - start_time:.2f} 秒")
 
