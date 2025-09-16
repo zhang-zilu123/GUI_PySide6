@@ -81,9 +81,9 @@ class HistoryController(QObject):
 
                 value = item.get(field_mapping.get(field, field), "")
 
-                # 如果是 is_error 字段，转换布尔值为中文
+                # 如果是 上传情况 字段，转换布尔值为中文
                 if field == "上传情况" and isinstance(value, bool):
-                    value = "失败" if value else "成功"
+                    value = "上传失败" if value else "上传成功"
 
                 table_item = QTableWidgetItem(str(value))
 
