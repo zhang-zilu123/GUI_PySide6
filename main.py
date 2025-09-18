@@ -3,11 +3,16 @@
 创建QApplication实例和主窗口，启动应用程序事件循环
 """
 import sys
+import os
+
+# 确保当前目录在 Python 路径中
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
+
 from PySide6.QtWidgets import QApplication
 from PySide6.QtGui import QIcon
 from main_window import MainWindow
-
-
 def main():
     """应用程序主函数"""
     # 创建QApplication实例，管理应用程序级别资源

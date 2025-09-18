@@ -5,7 +5,7 @@ import json
 import os.path
 
 from PySide6.QtWidgets import (QMainWindow, QStatusBar, QMessageBox, QTabWidget,
-                             QSizePolicy)
+                               QSizePolicy)
 from PySide6.QtCore import Qt
 
 from controllers.history_controller import HistoryController
@@ -18,6 +18,7 @@ from controllers.upload_controller import UploadController
 from controllers.edit_controller import EditController
 from controllers.preview_controller import PreviewController
 from styles import StyleManager
+from utils.write_to_mineru_json import write_mineru_config
 
 
 class MainWindow(QMainWindow):
@@ -26,6 +27,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         """初始化主窗口"""
         super().__init__()
+        write_mineru_config()
 
         # 初始化数据管理器
         self.data_manager = DataManager()
@@ -84,7 +86,6 @@ class MainWindow(QMainWindow):
 
         # 检查临时数据
         self._check_temp_data()
-
 
     def _check_temp_data(self):
         """检查临时数据文件"""
