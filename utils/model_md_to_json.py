@@ -1,13 +1,20 @@
-from openai import OpenAI
-from random import choice
+"""
+Markdown文件信息提取模块
+使用AI模型从Markdown文件中提取费用明细信息
+"""
 import os
-import json
+from typing import Optional
+from random import choice
 
+from openai import OpenAI
+
+# 配置API密钥
 os.environ["DASHSCOPE_API_KEY1"] = "sk-ca1bef1139754026b86788af0dbbbbd4"
 os.environ["DASHSCOPE_API_KEY2"] = "sk-381d3df1c3ee4623bb9a1b9c767f7b5e"
 os.environ["DASHSCOPE_API_KEY3"] = "sk-22d825174e1143d8ba6822880addf9ea"
 
-dash_keys = [
+# API密钥池
+DASH_KEYS = [
     os.getenv("DASHSCOPE_API_KEY1"),
     os.getenv("DASHSCOPE_API_KEY2"),
     os.getenv("DASHSCOPE_API_KEY3"),
@@ -15,30 +22,98 @@ dash_keys = [
 
 
 def extract_info_from_md(md_file_path: str) -> str:
-    """从单个 markdown 文件中提取信息"""
-    content = ""
-
-    # 读取所有 md 文件内容
-    if not os.path.exists(md_file_path):
-        print(f"错误: 文件 {md_file_path} 不存在。")
+    """从单个markdown文件中提取信息
+    
+    Args:
+        md_file_path: Markdown文件路径
+        
+    Returns:
+        提取的JSON字符串结果
+        
+    Raises:
+        FileNotFoundError: 当文件不存在时
+        Exception: 当API调用失败时
+    """
+    content = _read_markdown_file(md_file_path)
+    if not content:
+        return "{}"
 
     try:
-        with open(md_file_path, 'r', encoding='utf-8') as file:
-            content = file.read()
-    except Exception as e:
-        print(f"读取文件 {md_file_path} 时出错: {e}")
+        client = _create_openai_client()
+        response = _call_extraction_api(client, content)
+        return response.choices[0].message.content
 
-    client = OpenAI(
-        api_key=choice(dash_keys),
+    except Exception as e:
+        print(f"API调用失败: {e}")
+        raise
+
+
+def _read_markdown_file(file_path: str) -> Optional[str]:
+    """读取Markdown文件内容
+    
+    Args:
+        file_path: 文件路径
+        
+    Returns:
+        文件内容或None（如果读取失败）
+    """
+    if not os.path.exists(file_path):
+        print(f"错误: 文件 {file_path} 不存在。")
+        return None
+
+    try:
+        with open(file_path, 'r', encoding='utf-8') as file:
+            return file.read()
+    except Exception as e:
+        print(f"读取文件 {file_path} 时出错: {e}")
+        return None
+
+
+def _create_openai_client() -> OpenAI:
+    """创建OpenAI客户端
+    
+    Returns:
+        配置好的OpenAI客户端
+    """
+    return OpenAI(
+        api_key=choice(DASH_KEYS),
         base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
     )
-    response = client.chat.completions.create(
-        model="qwen-max",
-        # model="qwen-flash",
 
+
+def _call_extraction_api(client: OpenAI, content: str):
+    """调用信息提取API
+    
+    Args:
+        client: OpenAI客户端
+        content: 要处理的内容
+        
+    Returns:
+        API响应
+    """
+    prompt = _build_extraction_prompt(content)
+
+    return client.chat.completions.create(
+        model="qwen-max",
         messages=[
             {'role': 'system', 'content': 'You are a helpful assistant designed to output JSON.'},
-            {'role': 'user', 'content': f"""
+            {'role': 'user', 'content': prompt}
+        ],
+        response_format={"type": "json_object"}
+    )
+
+
+def _build_extraction_prompt(content: str) -> str:
+    """构建提取信息的提示词
+    
+    Args:
+        content: 文档内容
+        
+    Returns:
+        完整的提示词
+    """
+    # 简化的提示词，避免复杂的格式问题
+    prompt = """
 # 角色
 你是一个顶级的数据结构化专家，专门从非结构化的 Markdown 文本中精准提取关键信息，并转换为结构化 JSON 格式。
 
@@ -130,30 +205,30 @@ def extract_info_from_md(md_file_path: str) -> str:
 ```json
 {
 [
-    {
-        "外销合同": "DJSCTAO250000746",
-        "船代公司": "青岛林沃供应链管理有限公司",
-        "费用名称": "海运费",
-        "货币代码": "CNY",
-        "金额": "0.00",
-        "备注": ""
-    },
-    {
-        "外销合同": "DJSCTAO250000746",
-        "船代公司": "青岛林沃供应链管理有限公司",
-        "费用名称": "场站费",
-        "货币代码": "CNY",
-        "金额": "800.00",
-        "备注": ""
-    },
-    {
-        "外销合同": "DJSCTAO250000746",
-        "船代公司": "青岛林沃供应链管理有限公司",
-        "费用名称": "港杂费",
-        "货币代码": "CNY",
-        "金额": "746.00",
-        "备注": ""
-    }
+{
+    "外销合同": "DJSCTAO250000746",
+    "船代公司": "青岛林沃供应链管理有限公司",
+    "费用名称": "海运费",
+    "货币代码": "CNY",
+    "金额": "0.00",
+    "备注": ""
+},
+{
+    "外销合同": "DJSCTAO250000746",
+    "船代公司": "青岛林沃供应链管理有限公司",
+    "费用名称": "场站费",
+    "货币代码": "CNY",
+    "金额": "800.00",
+    "备注": ""
+},
+{
+    "外销合同": "DJSCTAO250000746",
+    "船代公司": "青岛林沃供应链管理有限公司",
+    "费用名称": "港杂费",
+    "货币代码": "CNY",
+    "金额": "746.00",
+    "备注": ""
+}
 ]
 }
 ```
@@ -162,21 +237,14 @@ def extract_info_from_md(md_file_path: str) -> str:
 * 返回一个顶层 JSON 对象，包含你提取到的全部信息。
 # 开始处理
 ## 文本内容:
-{content}
-"""
-             },
-        ],
+""" + content
 
-        response_format={"type": "json_object"}
-    )
-
-    return response.choices[0].message.content
+    return prompt
 
 
 if __name__ == "__main__":
-    md_file_paths = [
-        r"output1\G25RU03088费用明细\auto\G25RU03088费用明细.md",
-
-    ]
-    result = extract_info_from_md(md_file_paths)
-    print(result)
+    # 测试代码
+    test_file = "test.md"
+    if os.path.exists(test_file):
+        result = extract_info_from_md(test_file)
+        print(result)

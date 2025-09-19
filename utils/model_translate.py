@@ -1,41 +1,94 @@
-from openai import OpenAI
-from random import choice
+"""
+JSON数据翻译模块
+使用AI模型翻译船代公司名称等字段
+"""
 import os
-import time
-from datetime import datetime
 import sys
 from pathlib import Path
+from typing import Any
+from random import choice
 
+from openai import OpenAI
+
+# 添加项目根目录到路径
 sys.path.append(str(Path(__file__).parent.parent))
 
-from data.temp_data import get_data
-
+# 配置API密钥
 os.environ["DASHSCOPE_API_KEY1"] = "sk-ca1bef1139754026b86788af0dbbbbd4"
 os.environ["DASHSCOPE_API_KEY2"] = "sk-381d3df1c3ee4623bb9a1b9c767f7b5e"
 os.environ["DASHSCOPE_API_KEY3"] = "sk-22d825174e1143d8ba6822880addf9ea"
 
-dash_keys = [
+# API密钥池
+DASH_KEYS = [
     os.getenv("DASHSCOPE_API_KEY1"),
     os.getenv("DASHSCOPE_API_KEY2"),
     os.getenv("DASHSCOPE_API_KEY3"),
 ]
 
 
-def translate_json(content) -> str:
-    """从json文件中翻译船代公司"""
+def translate_json(content: Any) -> str:
+    """从JSON数据中翻译船代公司名称
+    
+    Args:
+        content: 要翻译的JSON内容
+        
+    Returns:
+        翻译后的JSON字符串
+        
+    Raises:
+        Exception: 当API调用失败时
+    """
+    try:
+        client = _create_openai_client()
+        response = _call_translation_api(client, content)
+        return response.choices[0].message.content
 
-    client = OpenAI(
-        api_key=choice(dash_keys),
+    except Exception as e:
+        print(f"翻译API调用失败: {e}")
+        raise
+
+
+def _create_openai_client() -> OpenAI:
+    """创建OpenAI客户端
+    
+    Returns:
+        配置好的OpenAI客户端
+    """
+    return OpenAI(
+        api_key=choice(DASH_KEYS),
         base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
     )
-    response = client.chat.completions.create(
-        # model="qwen-max",
-        # model="qwen-plus",
-        model="qwen-flash",
 
+
+def _call_translation_api(client: OpenAI, content: Any):
+    """调用翻译API
+    
+    Args:
+        client: OpenAI客户端
+        content: 要翻译的内容
+        
+    Returns:
+        API响应
+    """
+    return client.chat.completions.create(
+        model="qwen-flash",  # 使用快速模型进行翻译
         messages=[
             {'role': 'system', 'content': 'You are a helpful assistant designed to output JSON.'},
-            {'role': 'user', 'content': f"""
+            {'role': 'user', 'content': _build_translation_prompt(content)}
+        ]
+    )
+
+
+def _build_translation_prompt(content: Any) -> str:
+    """构建翻译提示词
+    
+    Args:
+        content: 要翻译的内容
+        
+    Returns:
+        完整的翻译提示词
+    """
+    prompt = """
 # 背景
 - 文本来源于**外贸公司的货代发票或费用单**，其中包含合同号、公司信息及费用明细。
 - 这些公司主要包括：
@@ -129,54 +182,41 @@ def translate_json(content) -> str:
 
 ```json
 { [{
-                "外销合同": "742N004924NB0",
-                "船代公司": "世纪冠航国际货运代理（深圳）有限公司宁波分公司",
-                "费用名称": "柜子费",
-                "货币代码": "CNY",
-                "金额": "160.00",
-                "备注": ""
-            },
-            {
-                "外销合同": "742N004924NB0",
-                "船代公司": "世纪冠航国际货运代理（深圳）有限公司宁波分公司",
-                "费用名称": "CUSTOMS CLEARANCE/DECLARATION (EXPORT)",
-                "货币代码": "CNY",
-                "金额": "130.00",
-                "备注": ""
-            }
-        ] }
+    "外销合同": "742N004924NB0",
+    "船代公司": "世纪冠航国际货运代理（深圳）有限公司宁波分公司",
+    "费用名称": "柜子费",
+    "货币代码": "CNY",
+    "金额": "160.00",
+    "备注": ""
+},
+{
+    "外销合同": "742N004924NB0",
+    "船代公司": "世纪冠航国际货运代理（深圳）有限公司宁波分公司",
+    "费用名称": "CUSTOMS CLEARANCE/DECLARATION (EXPORT)",
+    "货币代码": "CNY",
+    "金额": "130.00",
+    "备注": ""
+}
+] }
 ```
 
 # 开始处理
 ## 文本内容:
-{content}
+""" + str(content)
 
-"""
-            },
-        ],
-        response_format={"type": "json_object"}
-    )
-
-    return response.choices[0].message.content
+    return prompt
 
 
 if __name__ == "__main__":
-    #     content = """
-    #     {
-    # "外销合同": "DJSCTAO250000746",
-    # "船代公司": "GOURMET HOME PRODUCTS LLC",
-    # "费用名称": "海运费",
-    # "货币代码": "CNY",
-    # "金额": "0.00",
-    # "备注": ""
-    # }
-    #
-    #
-    #     """
-    start_time = time.time()
-    start_datetime = datetime.now()
-    content = get_data()
-    print(translate_json(content))
-    end_time = time.time()
-    end_datetime = datetime.now()
-    print(f"总耗时: {end_time - start_time} 秒")
+    # 测试代码
+    test_data = {
+        "外销合同": "742N004924NB0",
+        "船代公司": "Century Distribution Systems Ltd",
+        "费用名称": "柜子费",
+        "货币代码": "CNY",
+        "金额": "160.00",
+        "备注": ""
+    }
+
+    result = translate_json(test_data)
+    print(result)

@@ -2,6 +2,7 @@
 历史记录界面
 用户在此界面查看已上传的文件和历史数据记录
 """
+from typing import List
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                                QListWidget, QTableWidget, QAbstractItemView,
                                QHeaderView, QApplication, QSplitter)
@@ -42,10 +43,30 @@ class HistoryView(QWidget):
 
         # 创建分割器以支持调整大小
         splitter = QSplitter(Qt.Horizontal)
+        
+        # 优化分割器效果
+        splitter.setChildrenCollapsible(False)  # 防止子窗口被完全折叠
+        splitter.setHandleWidth(8)  # 设置分割器手柄宽度
+        splitter.setStyleSheet("""
+            QSplitter::handle {
+                background-color: #e0e0e0;
+                border: 1px solid #c0c0c0;
+                border-radius: 2px;
+            }
+            QSplitter::handle:hover {
+                background-color: #d0d0d0;
+            }
+            QSplitter::handle:pressed {
+                background-color: #b0b0b0;
+            }
+        """)
+        
         main_layout.addWidget(splitter, 1)
 
         # 左侧区域 - 文件列表
         left_widget = QWidget()
+        left_widget.setMinimumWidth(200)  # 设置左侧最小宽度
+        left_widget.setMaximumWidth(500)  # 设置左侧最大宽度
         left_layout = QVBoxLayout(left_widget)
         left_layout.setContentsMargins(0, 0, 10, 0)
 
@@ -63,6 +84,7 @@ class HistoryView(QWidget):
 
         # 右侧区域 - 数据详情
         right_widget = QWidget()
+        right_widget.setMinimumWidth(400)  # 设置右侧最小宽度
         right_layout = QVBoxLayout(right_widget)
         right_layout.setContentsMargins(10, 0, 0, 0)
 
@@ -135,8 +157,55 @@ class HistoryView(QWidget):
         right_layout.addWidget(self.data_table, 1)  # 表格占据剩余空间
         splitter.addWidget(right_widget)
 
-        # 设置分割器的初始比例 (30% : 70%)
-        splitter.setSizes([300, 700])
+        # 设置分割器的初始比例和限制
+        splitter.setSizes([300, 700])  # 初始比例 30% : 70%
+        splitter.setStretchFactor(0, 0)  # 左侧不自动拉伸
+        splitter.setStretchFactor(1, 1)  # 右侧自动拉伸
+        
+        # 保存分割器引用，便于后续操作
+        self.splitter = splitter
+        
+        # 连接分割器事件
+        self.splitter.splitterMoved.connect(self._on_splitter_moved)
+
+    def _on_splitter_moved(self, pos: int, index: int) -> None:
+        """分割器移动事件处理
+        
+        Args:
+            pos: 新位置
+            index: 分割器索引
+        """
+        # 获取当前分割器大小
+        sizes = self.splitter.sizes()
+        
+        # 确保左侧面板不会太小或太大
+        if sizes[0] < 180:
+            self.splitter.setSizes([180, sizes[1] + (sizes[0] - 180)])
+        elif sizes[0] > 450:
+            self.splitter.setSizes([450, sizes[1] + (sizes[0] - 450)])
+    
+    def reset_splitter_ratio(self) -> None:
+        """重置分割器比例到默认状态"""
+        total_width = self.width() if self.width() > 0 else 1000
+        left_width = int(total_width * 0.3)  # 30%
+        right_width = total_width - left_width  # 70%
+        self.splitter.setSizes([left_width, right_width])
+    
+    def get_splitter_state(self) -> List[int]:
+        """获取当前分割器状态
+        
+        Returns:
+            分割器大小列表
+        """
+        return self.splitter.sizes()
+    
+    def set_splitter_state(self, sizes: List[int]) -> None:
+        """设置分割器状态
+        
+        Args:
+            sizes: 分割器大小列表
+        """
+        self.splitter.setSizes(sizes)
 
 
 if __name__ == "__main__":
