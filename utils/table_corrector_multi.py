@@ -8,7 +8,7 @@ import json
 import re
 import base64
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed  
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Any
 
@@ -536,6 +536,20 @@ class TableCorrector:
 
             if not all_tables:
                 report["overall_errors"].append("未找到表格")
+                print("未找到表格，但仍尝试从原始MD文件提取结构化数据...")
+                try:
+                    extracted_info = self._extract_info_async(str(md_file))
+                    report["extracted_info"].extend(extracted_info)
+                    # 如果成功提取到数据，也算作处理成功
+                    if extracted_info:
+                        report["success"] = True
+                        report["output_file"] = str(md_file)  # 使用原始文件
+                        print(f"从原始MD文件提取到 {len(extracted_info)} 条结构化数据")
+                    else:
+                        print("未能从原始MD文件提取到结构化数据")
+                except Exception as e:
+                    print(f"从原始MD文件提取结构化数据失败: {e}")
+                    report["overall_errors"].append(f"提取结构化数据失败: {e}")
                 return report
 
             report["table_count"] = len(all_tables)
@@ -546,6 +560,7 @@ class TableCorrector:
 
             if not table_image_mapping:
                 report["overall_errors"].append("创建表格-图片映射失败")
+                print('创建表格-图片映射失败')
                 return report
 
             # 提取预期合计
