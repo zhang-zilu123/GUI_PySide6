@@ -2,21 +2,48 @@
 预览功能控制器
 处理数据预览相关的业务逻辑
 """
+
 import json
 import os
 import shutil
+import logging
 from typing import Dict, List, Any, Optional
 from urllib.parse import urlparse, parse_qs
 
 import requests
+from datetime import datetime
 from PySide6.QtCore import QObject, Signal, Qt, QUrl
-from PySide6.QtWidgets import (QVBoxLayout, QDialog, QMessageBox)
+from PySide6.QtWidgets import QVBoxLayout, QDialog, QMessageBox
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply
 
 from config.config import SUBMIT_FIELD
 from data.history_manager import HistoryManager
 from data.token_manager import token_manager
+
+os.makedirs("./log", exist_ok=True)
+current_time = datetime.now().strftime("%Y%m%d-%H%M")
+log_filename = f"./log/{current_time}-提交至OA数据库.log"
+
+logger = logging.getLogger("preview")
+handler = logging.FileHandler(log_filename, encoding="utf-8")
+formatter = logging.Formatter("%(asctime)s - %(message)s")
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+logger.setLevel(logging.INFO)
+
+error_log_filename = f"./log/{current_time}-error.log"
+error_handler = logging.FileHandler(error_log_filename, encoding="utf-8")
+error_formatter = logging.Formatter("%(asctime)s - %(message)s")
+error_handler.setFormatter(error_formatter)
+error_handler.setLevel(logging.ERROR)
+logger.addHandler(error_handler)
+
+with open("./device_id.txt", "r", encoding="utf-8") as f:
+    content = f.read()
+    logger.info(f"device_id:{content}")
+
+user_name = ""
 
 
 class LoginDialog(QDialog):
@@ -26,7 +53,7 @@ class LoginDialog(QDialog):
 
     def __init__(self, parent=None):
         """初始化登录对话框
-        
+
         Args:
             parent: 父窗口
         """
@@ -49,7 +76,7 @@ class LoginDialog(QDialog):
 
     def get_login_url(self) -> None:
         """请求后端获取扫码登录页面URL"""
-        api_url = 'http://47.100.46.227:5586/api/login/qw_login_url?next=/chat'
+        api_url = "http://47.100.46.227:5586/api/login/qw_login_url?next=/chat"
         request = QNetworkRequest(QUrl(api_url))
         request.setHeader(QNetworkRequest.ContentTypeHeader, "application/json")
         request.setRawHeader(b"User-Agent", b"PySide6 Network Client")
@@ -72,13 +99,13 @@ class LoginDialog(QDialog):
 
     def _handle_successful_url_response(self, reply: QNetworkReply) -> None:
         """处理成功的URL响应
-        
+
         Args:
             reply: 网络回复对象
         """
         try:
             data = json.loads(reply.readAll().data().decode())
-            login_url = data.get('data', '') if isinstance(data, dict) else str(data)
+            login_url = data.get("data", "") if isinstance(data, dict) else str(data)
 
             if login_url:
                 self.web_view.load(login_url)
@@ -91,7 +118,7 @@ class LoginDialog(QDialog):
 
     def on_url_changed(self, qurl: QUrl) -> None:
         """监听扫码后页面跳转，获取code和state参数并请求后端登录
-        
+
         Args:
             qurl: 新的URL
         """
@@ -103,7 +130,7 @@ class LoginDialog(QDialog):
 
     def _handle_login_redirect(self, url: str) -> None:
         """处理登录重定向
-        
+
         Args:
             url: 重定向URL
         """
@@ -121,17 +148,17 @@ class LoginDialog(QDialog):
 
     def _send_login_request(self, code: str, state: str) -> None:
         """发送登录请求
-        
+
         Args:
             code: 授权码
             state: 状态参数
         """
-        api_url = 'http://47.100.46.227:5586/api/login/qw_login'
+        api_url = "http://47.100.46.227:5586/api/login/qw_login"
         request = QNetworkRequest(QUrl(api_url))
         request.setHeader(QNetworkRequest.ContentTypeHeader, "application/json")
 
-        payload = {'code': code, 'state': state}
-        json_data = json.dumps(payload).encode('utf-8')
+        payload = {"code": code, "state": state}
+        json_data = json.dumps(payload).encode("utf-8")
         reply = self.network_manager.post(request, json_data)
         reply.finished.connect(self.handle_login_response)
 
@@ -151,28 +178,33 @@ class LoginDialog(QDialog):
 
     def _handle_successful_login(self, reply: QNetworkReply) -> None:
         """处理成功的登录响应
-        
+
         Args:
             reply: 网络回复对象
         """
         try:
             data = json.loads(reply.readAll().data().decode())
-            if data.get('code') == 200:
+            if data.get("code") == 200:
                 self.web_view.urlChanged.disconnect(self.on_url_changed)
-                token = data.get('data', {}).get('token', '')
+                token = data.get("data", {}).get("token", "")
                 token_manager.set_token(token)
                 self.login_success.emit()
                 QMessageBox.information(self, "成功", "登录成功, 可上传数据")
+                api_url = "http://47.100.46.227:5586/api/admin/check/get_permission"
+                headers = {"Authorization": f"Bearer {token}"}
+                response = requests.get(api_url, headers=headers)
+                user_name = response.json()["user_name"]
+                logger.info(f"user_name:{user_name}")
                 self.accept()
             else:
-                raise ValueError(data.get('message', '登录失败'))
+                raise ValueError(data.get("message", "登录失败"))
         except Exception as e:
             QMessageBox.warning(self, "错误", f"登录响应解析失败: {e}")
 
 
 class PreviewController(QObject):
     """预览功能控制器
-    
+
     负责处理数据预览和上传相关的业务逻辑：
     - 数据预览展示
     - 用户登录管理
@@ -187,7 +219,7 @@ class PreviewController(QObject):
 
     def __init__(self, view, data_manager):
         """初始化预览控制器
-        
+
         Args:
             view: 预览视图对象
             data_manager: 数据管理器
@@ -202,8 +234,12 @@ class PreviewController(QObject):
 
     def _connect_signals(self) -> None:
         """连接视图信号"""
-        self.view.back_button.clicked.connect(lambda: self.back_to_edit_requested.emit())
-        self.view.upfile_button.clicked.connect(lambda: self.continue_upload_requested.emit())
+        self.view.back_button.clicked.connect(
+            lambda: self.back_to_edit_requested.emit()
+        )
+        self.view.upfile_button.clicked.connect(
+            lambda: self.continue_upload_requested.emit()
+        )
         self.view.upload_button.clicked.connect(self._on_upload_clicked)
         self.view.load_button.clicked.connect(self._on_load_button_clicked)
 
@@ -221,7 +257,7 @@ class PreviewController(QObject):
 
     def set_data(self, data: List[Dict[str, Any]]) -> None:
         """设置要预览的数据
-        
+
         Args:
             data: 要预览的数据列表
         """
@@ -247,7 +283,7 @@ class PreviewController(QObject):
 
     def _populate_preview_table(self, data_list: List[Dict[str, Any]]) -> None:
         """填充预览表格数据
-        
+
         Args:
             data_list: 数据列表
         """
@@ -267,7 +303,9 @@ class PreviewController(QObject):
 
         data_count = len(self.data)
         filename = self.data_manager.file_name or "未知文件"
-        summary_text = f"记录数: {data_count}\n文件名:{filename} \n状态: 已审核\n准备上传"
+        summary_text = (
+            f"记录数: {data_count}\n文件名:{filename} \n状态: 已审核\n准备上传"
+        )
         self.view.summary_text.setPlainText(summary_text)
 
     def _on_upload_clicked(self) -> None:
@@ -285,7 +323,7 @@ class PreviewController(QObject):
 
     def _validate_login(self) -> bool:
         """验证登录状态
-        
+
         Returns:
             是否已登录
         """
@@ -297,7 +335,7 @@ class PreviewController(QObject):
 
     def _validate_data(self) -> bool:
         """验证数据
-        
+
         Returns:
             数据是否有效
         """
@@ -311,7 +349,11 @@ class PreviewController(QObject):
         # 清理临时文件夹
         self._cleanup_temp_files()
 
-        print('准备上传数据:', self.data)
+        print("准备上传数据:", self.data)
+        files = {item["源文件"] for item in self.data}
+        logger.info(f"点击执行提交的文件:{files}")
+        # TODO:真实上传
+        # up_local_file(log_filename)
 
         # 处理数据并上传
         processed_data = self._process_data(self.data)
@@ -322,57 +364,70 @@ class PreviewController(QObject):
 
     def _cleanup_temp_files(self) -> None:
         """清理临时文件"""
-        if os.path.exists('temp'):
-            shutil.rmtree('temp')
+        if os.path.exists("temp"):
+            shutil.rmtree("temp")
 
-    def _upload_to_server(self, processed_data: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    def _upload_to_server(
+            self, processed_data: List[Dict[str, Any]]
+    ) -> Optional[Dict[str, Any]]:
         """上传数据到服务器
-        
+
         Args:
             processed_data: 处理后的数据
-            
+
         Returns:
             上传结果或None（如果失败）
         """
-        API_URL = 'http://47.100.46.227:5586/api/internal/cost_ident/upload_oa'
+        API_URL = "http://47.100.46.227:5586/api/internal/cost_ident/upload_oa"
         headers = {"Authorization": f"Bearer {token_manager.token}"}
 
         try:
             response = requests.post(API_URL, json=processed_data, headers=headers)
             result = response.json()
-            print('上传接口响应:', result)
+            print("上传接口响应:", result)
             return result
         except Exception as e:
             QMessageBox.critical(self.view, "错误", f"上传请求失败: {e}, 请重新上传")
             return None
 
-    def _handle_upload_result(self, result: Dict[str, Any], processed_data: List[Dict[str, Any]]) -> None:
+    def _handle_upload_result(
+            self, result: Dict[str, Any], processed_data: List[Dict[str, Any]]
+    ) -> None:
         """处理上传结果
-        
+
         Args:
             result: 上传结果
             processed_data: 处理后的数据
         """
         error_list = []
 
-        if result.get('code') == 200:
-            error_list = result.get('error_list', [])
+        if result.get("code") == 200:
+            error_list = result.get("error_list", [])
             if error_list is None:
                 QMessageBox.information(self.view, "成功", "上传成功")
             else:
-                QMessageBox.warning(self.view, "部分成功",
-                                    f"{result.get('message')}。请查看预览数据后重新上传")
+                QMessageBox.warning(
+                    self.view,
+                    "部分成功",
+                    f"{result.get('message')}。请查看预览数据后重新上传",
+                )
         else:
-            QMessageBox.critical(self.view, "错误", f"上传失败: {result.get('message')}")
+            QMessageBox.critical(
+                self.view, "错误", f"上传失败: {result.get('message')}"
+            )
             return
 
         # 处理结果数据
         self._process_upload_result(error_list, processed_data, result)
 
-    def _process_upload_result(self, error_list: List[Any], processed_data: List[Dict[str, Any]],
-                               result: Dict[str, Any]) -> None:
+    def _process_upload_result(
+            self,
+            error_list: List[Any],
+            processed_data: List[Dict[str, Any]],
+            result: Dict[str, Any],
+    ) -> None:
         """处理上传结果数据
-        
+
         Args:
             error_list: 错误列表
             processed_data: 处理后的数据
@@ -382,7 +437,9 @@ class PreviewController(QObject):
 
         if error_list:
             # 保留上传失败的数据
-            result_data = self._reserve_error_data(self.data, processed_data, error_list)
+            result_data = self._reserve_error_data(
+                self.data, processed_data, error_list
+            )
             save_data = self._mark_error(self.data, result)
             self.set_data(result_data)
             self.data = result_data
@@ -401,7 +458,7 @@ class PreviewController(QObject):
 
     def _save_upload_record(self, save_data: List[Dict[str, Any]]) -> None:
         """保存上传记录
-        
+
         Args:
             save_data: 要保存的数据
         """
@@ -416,10 +473,10 @@ class PreviewController(QObject):
 
     def _process_data(self, data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """处理数据格式以符合API要求
-        
+
         Args:
             data: 原始数据
-            
+
         Returns:
             处理后的数据
         """
@@ -435,27 +492,30 @@ class PreviewController(QObject):
 
             new_row = {
                 "split_id": group_map[key],
-                'wxht': row.get("外销合同", ""),
-                'skdw': row.get("船代公司", ""),
-                'fymc': row.get("费用名称", ""),
-                'bb': row.get("货币代码", ""),
-                'je': float(row.get("金额", 0)),
-                'bz': row.get("备注", "")
+                "wxht": row.get("外销合同", ""),
+                "skdw": row.get("船代公司", ""),
+                "fymc": row.get("费用名称", ""),
+                "bb": row.get("货币代码", ""),
+                "je": float(row.get("金额", 0)),
+                "bz": row.get("备注", ""),
             }
             new_list.append(new_row)
 
         return new_list
 
-    def _reserve_error_data(self, old_data: List[Dict[str, Any]],
-                            new_data: List[Dict[str, Any]],
-                            error_list: List[Any]) -> List[Dict[str, Any]]:
+    def _reserve_error_data(
+            self,
+            old_data: List[Dict[str, Any]],
+            new_data: List[Dict[str, Any]],
+            error_list: List[Any],
+    ) -> List[Dict[str, Any]]:
         """保留错误数据
-        
+
         Args:
             old_data: 原始数据
             new_data: 处理后的数据
             error_list: 错误列表
-            
+
         Returns:
             保留的错误数据
         """
@@ -466,38 +526,46 @@ class PreviewController(QObject):
                     if self._rows_match(new_row, old_row):
                         result.append(old_row)
                         break
+
+        error_file = {item['源文件'] for item in result}
+        logger.error(f'提交至OA失败文件:{error_file}')
+        # TODO:真实上传
+        # up_local_file(error_log_filename)
         return result
 
     def _rows_match(self, new_row: Dict[str, Any], old_row: Dict[str, Any]) -> bool:
         """检查新旧行是否匹配
-        
+
         Args:
             new_row: 新行数据
             old_row: 旧行数据
-            
+
         Returns:
             是否匹配
         """
-        return (new_row.get("wxht") == old_row.get("外销合同") and
-                new_row.get("skdw") == old_row.get("船代公司") and
-                new_row.get("fymc") == old_row.get("费用名称") and
-                new_row.get("bb") == old_row.get("货币代码") and
-                float(new_row.get("je", 0)) == float(old_row.get("金额", 0)) and
-                new_row.get("bz") == old_row.get("备注"))
+        return (
+                new_row.get("wxht") == old_row.get("外销合同")
+                and new_row.get("skdw") == old_row.get("船代公司")
+                and new_row.get("fymc") == old_row.get("费用名称")
+                and new_row.get("bb") == old_row.get("货币代码")
+                and float(new_row.get("je", 0)) == float(old_row.get("金额", 0))
+                and new_row.get("bz") == old_row.get("备注")
+        )
 
-    def _mark_error(self, old_data: List[Dict[str, Any]],
-                    result: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _mark_error(
+            self, old_data: List[Dict[str, Any]], result: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
         """标记错误数据
-        
+
         Args:
             old_data: 原始数据
             result: 上传结果
-            
+
         Returns:
             标记后的数据
         """
         result_list = []
-        result_set = [tuple(sorted(item.items())) for item in result.get('data', [])]
+        result_set = [tuple(sorted(item.items())) for item in result.get("data", [])]
 
         for item in old_data:
             item_copy = item.copy()

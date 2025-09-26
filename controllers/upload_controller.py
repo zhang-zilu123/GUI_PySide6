@@ -27,14 +27,17 @@ from utils.file_to_pdf import excel_to_pdf_1, excel_to_pdf_2, word_to_pdf
 
 os.makedirs('./log', exist_ok=True)
 current_time = datetime.now().strftime('%Y%m%d-%H%M')
-log_filename = f'./log/{current_time}上传文件.log'
+log_filename = f'./log/{current_time}-上传文件.log'
+logger = logging.getLogger("upload")
+handler = logging.FileHandler(log_filename, encoding='utf-8')
+formatter = logging.Formatter('%(asctime)s - %(message)s')
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+logger.setLevel(logging.INFO)
 
-logging.basicConfig(
-    filename=log_filename,
-    level=logging.INFO,
-    format='%(asctime)s - %(message)s',
-    encoding='utf-8'
-)
+with open('./device_id.txt', 'r', encoding='utf-8') as f:
+    content = f.read()
+    logger.info(f'device_id:{content}')
 
 
 class ExtractDataWorker(QThread):
@@ -93,7 +96,7 @@ class ExtractDataWorker(QThread):
                         # object_key = up_local_file(file_path)
                         object_key = 0
                         object_keys.append(object_key)
-                        logging.info(f'上传文件到OSS: {file_path} -> {object_key}')
+                        logger.info(f'上传文件到OSS: {file_path} -> {object_key}')
                     # up_local_file(log_filename)
                     print('上传到OSS完成:', log_filename)
                     data = self._extract_data_from_pdf(pdf_files)
@@ -110,7 +113,7 @@ class ExtractDataWorker(QThread):
                     # object_key = up_local_file(file_path)
                     object_key = 0
                     object_keys.append(object_key)
-                    logging.info(f'上传文件到OSS: {file_path} -> {object_key}')
+                    logger.info(f'上传文件到OSS: {file_path} -> {object_key}')
                 # up_local_file(log_filename)
                 print('上传到OSS完成:', log_filename)
                 data = self._extract_data_from_pdf(self.file_paths)

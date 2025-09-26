@@ -1,11 +1,13 @@
 import alibabacloud_oss_v2 as oss
 import os
+from dotenv import load_dotenv
 
 
 def up_local_file(local_file_path):
+    load_dotenv()
     # 配置API密钥
-    os.environ["OSS_ACCESS_KEY_ID"] = ""
-    os.environ["OSS_ACCESS_KEY_SECRET"] = ""
+    os.environ["OSS_ACCESS_KEY_ID"] = os.getenv("OSS_ACCESS_KEY_ID")
+    os.environ["OSS_ACCESS_KEY_SECRET"] = os.getenv("OSS_ACCESS_KEY_SECRET")
 
     # 从环境变量中加载凭证信息，用于身份验证
     credentials_provider = oss.credentials.EnvironmentVariableCredentialsProvider()
