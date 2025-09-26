@@ -7,7 +7,7 @@ import shutil
 import json
 import time
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 
 from PySide6.QtWidgets import QFileDialog, QMessageBox, QHBoxLayout, QPushButton
 from PySide6.QtCore import QObject, Signal, QThread, Qt
@@ -19,6 +19,7 @@ from utils.model_md_to_json import extract_info_from_md
 from config.config import EXTRA_FIELD, API_KEY
 from utils.model_translate import translate_json
 from utils.table_corrector_multi import TableCorrector
+from utils.file_to_pdf import excel_to_pdf_1, excel_to_pdf_2, word_to_pdf
 
 
 class ExtractDataWorker(QThread):
@@ -30,11 +31,14 @@ class ExtractDataWorker(QThread):
     # 信号：参数为文件名字符串, 提取的数据, 是否成功, 错误信息
     finished = Signal(str, list, bool, str)
 
-    def __init__(self, file_paths: List[str]):
+    def __init__(self, file_paths: List[str], process_directory: bool = False,
+                 original_file_mapping: Dict[str, str] = None):
         """初始化工作线程
         
         Args:
             file_paths: 要处理的文件路径列表
+            process_directory: 是否处理整个目录中的PDF文件
+            original_file_mapping: 转换后PDF文件名到原始文件路径的映射
         """
         super().__init__()
         # 确保 file_paths 是列表
@@ -45,17 +49,40 @@ class ExtractDataWorker(QThread):
         else:
             self.file_paths = list(file_paths)
 
+        self.process_directory = process_directory
+        self.original_file_mapping = original_file_mapping or {}
+
     def run(self) -> None:
         """在线程中执行耗时操作"""
         try:
-            # 获取文件名列表
-            filename_list = [os.path.basename(file_path) for file_path in self.file_paths]
-            filename_str = ", ".join(filename_list)
+            if self.process_directory:
+                # 处理目录中的所有PDF文件
+                pdf_files = []
+                for file_path in self.file_paths:
+                    if os.path.isdir(file_path):
+                        # 如果是目录，找到其中所有PDF文件
+                        for root, dirs, files in os.walk(file_path):
+                            for file in files:
+                                if file.lower().endswith('.pdf'):
+                                    pdf_files.append(os.path.join(root, file))
+                    elif file_path.lower().endswith('.pdf'):
+                        pdf_files.append(file_path)
 
-            print(f"开始解析PDF文件: {self.file_paths}")
-            # 提取数据
-            data = self._extract_data_from_pdf(self.file_paths)
-            self.finished.emit(filename_str, data, True, "")
+                if pdf_files:
+                    filename_list = [os.path.basename(file_path) for file_path in pdf_files]
+                    filename_str = ", ".join(filename_list)
+                    print(f"开始解析PDF文件: {pdf_files}")
+                    data = self._extract_data_from_pdf(pdf_files)
+                    self.finished.emit(filename_str, data, True, "")
+                else:
+                    self.finished.emit("", [], False, "未找到PDF文件进行处理")
+            else:
+                # 原有逻辑：直接处理文件列表
+                filename_list = [os.path.basename(file_path) for file_path in self.file_paths]
+                filename_str = ", ".join(filename_list)
+                print(f"开始解析PDF文件: {self.file_paths}")
+                data = self._extract_data_from_pdf(self.file_paths)
+                self.finished.emit(filename_str, data, True, "")
         except Exception as e:
             error_msg = f"处理文件时出错: {str(e)}"
             print(f"Error: {error_msg}")
@@ -87,7 +114,7 @@ class ExtractDataWorker(QThread):
         self._cleanup_temp_files()
 
         # 构建返回数据
-        return self._process_extracted_data(info_dict, file_paths)
+        return self._process_extracted_data(info_dict, file_paths, self.original_file_mapping)
 
     def _process_parsed_results(self) -> Dict[str, Any]:
         """处理解析结果
@@ -116,12 +143,14 @@ class ExtractDataWorker(QThread):
             print('删除临时文件夹 ./output')
 
     def _process_extracted_data(self, info_dict: Dict[str, Any],
-                                file_paths: List[str]) -> List[Dict[str, Any]]:
+                                file_paths: List[str], original_file_mapping: Dict[str, str] = None) -> List[
+        Dict[str, Any]]:
         """处理提取的数据
         
         Args:
             info_dict: 提取的信息字典
             file_paths: 文件路径列表
+            original_file_mapping: 转换后PDF文件名到原始文件路径的映射
             
         Returns:
             处理后的数据列表
@@ -130,7 +159,12 @@ class ExtractDataWorker(QThread):
         file_name_to_path = {}
         for file_path in file_paths:
             file_name = os.path.splitext(os.path.basename(file_path))[0]  # 去掉扩展名
-            file_name_to_path[file_name] = file_path
+
+            # 如果有原始文件映射，优先使用原始文件路径
+            if original_file_mapping and file_name in original_file_mapping:
+                file_name_to_path[file_name] = original_file_mapping[file_name]
+            else:
+                file_name_to_path[file_name] = file_path
 
         display_data = []
         for file_name, records in info_dict.items():
@@ -218,9 +252,9 @@ class UploadController(QObject):
         """打开文件选择对话框"""
         file_paths, _ = QFileDialog.getOpenFileNames(
             self.view,
-            "选择PDF文件",
+            "选择文件",
             "",
-            "PDF文件 (*.pdf);;所有文件 (*.*)"
+            "支持的文件 (*.pdf *.jpg *.jpeg *.png *.doc *.docx *.xls *.xlsx);;所有文件 (*.*)"
         )
 
         if file_paths:
@@ -258,7 +292,8 @@ class UploadController(QObject):
         if not os.path.isfile(file_path):
             return False
         _, ext = os.path.splitext(file_path)
-        return ext.lower() == '.pdf'
+        valid_extensions = ['.pdf', '.jpg', '.jpeg', '.png', '.doc', '.docx', '.xls', '.xlsx']
+        return ext.lower() in valid_extensions
 
     def _is_file_already_uploaded(self, file_path: str) -> bool:
         """检查文件是否已经上传
@@ -339,7 +374,7 @@ class UploadController(QObject):
         QMessageBox.warning(
             self.view,
             "文件格式错误",
-            f"以下文件格式不支持:\n{', '.join(invalid_names)}\n\n请选择PDF文件"
+            f"以下文件格式不支持:\n{', '.join(invalid_names)}\n\n请选择PDF, JPG, PNG, DOC, DOCX, XLS, XLSX格式的文件。"
         )
 
     # ==================== 文件列表管理 ====================
@@ -490,8 +525,8 @@ class UploadController(QObject):
         self.view.upload_info.setText("""
             <div style="font-size: 48px;">📁</div>
         <div style="font-size: 16px; color: #888;">点击或拖拽文件到此处上传</div>
-        <div style="font-size: 12px; color: #888;">（不建议上传中英混杂的pdf，容易出现解析错误）</div>   
-        <div style="font-size: 12px; color: #aaa;">支持格式: pdf</div>
+        <div style="font-size: 12px; color: #888;">（不建议上传中英混杂的文件，容易出现解析错误）</div>   
+        <div style="font-size: 12px; color: #aaa;">支持格式: pdf、jpg、jpeg、png、doc、docx、xls、xlsx</div>
         """)
 
     def _set_processing_state(self, processing):
@@ -502,6 +537,52 @@ class UploadController(QObject):
         self.view.clear_button.setEnabled(enabled)
         self.view.upload_frame.setEnabled(enabled)
 
+    # ==================== 文件类型检测 ====================
+    def _has_document_files(self, file_paths: List[str]) -> bool:
+        """检测文件列表中是否包含文档文件
+        
+        Args:
+            file_paths: 文件路径列表
+            
+        Returns:
+            如果包含doc, docx, xls, xlsx文件则返回True
+        """
+        document_extensions = ['.doc', '.docx', '.xls', '.xlsx']
+        for file_path in file_paths:
+            _, ext = os.path.splitext(file_path)
+            if ext.lower() in document_extensions:
+                return True
+        return False
+
+    def _separate_files_by_type(self, file_paths: List[str]) -> Dict[str, List[str]]:
+        """按文件类型分离文件
+        
+        Args:
+            file_paths: 文件路径列表
+            
+        Returns:
+            包含不同类型文件的字典
+        """
+        document_files = []
+        pdf_image_files = []
+
+        document_extensions = ['.doc', '.docx', '.xls', '.xlsx']
+        pdf_image_extensions = ['.pdf', '.jpg', '.jpeg', '.png']
+
+        for file_path in file_paths:
+            _, ext = os.path.splitext(file_path)
+            ext_lower = ext.lower()
+
+            if ext_lower in document_extensions:
+                document_files.append(file_path)
+            elif ext_lower in pdf_image_extensions:
+                pdf_image_files.append(file_path)
+
+        return {
+            'documents': document_files,
+            'pdf_images': pdf_image_files
+        }
+
     # ==================== 数据分析处理 ====================
     def _start_analysis(self):
         """开始分析处理"""
@@ -509,10 +590,99 @@ class UploadController(QObject):
         self.processing_started.emit()
         self.view.title.setText("正在提取识别中，请稍候...")
 
+        # 检查是否需要文档转换
+        if self._has_document_files(self.uploaded_files):
+            self._start_document_conversion_analysis()
+        else:
+            self._start_direct_analysis()
+
+    def _start_direct_analysis(self):
+        """开始直接分析（原有流程）"""
         worker = ExtractDataWorker(self.uploaded_files.copy())
         worker.finished.connect(self._on_worker_finished)
         worker.start()
         self.current_workers.append(worker)
+
+    def _start_document_conversion_analysis(self):
+        """开始文档转换分析"""
+        try:
+            # 创建输出目录
+            output_dir = os.path.join(os.getcwd(), "converted_files")
+            if os.path.exists(output_dir):
+                shutil.rmtree(output_dir)
+            os.makedirs(output_dir)
+
+            # 转换文档并复制文件
+            converted_files, file_mapping = self._convert_documents_and_copy_files(self.uploaded_files, output_dir)
+
+            # 使用转换后的目录进行分析（处理目录中所有PDF文件）
+            worker = ExtractDataWorker([output_dir], process_directory=True, original_file_mapping=file_mapping)
+            worker.finished.connect(self._on_worker_finished)
+            worker.start()
+            self.current_workers.append(worker)
+
+        except Exception as e:
+            error_msg = f"文档转换失败: {str(e)}"
+            self._handle_extraction_error(error_msg)
+
+    def _convert_documents_and_copy_files(self, file_paths: List[str], output_dir: str) -> Tuple[
+        List[str], Dict[str, str]]:
+        """转换文档文件并复制其他文件到输出目录
+        
+        Args:
+            file_paths: 原始文件路径列表
+            output_dir: 输出目录
+            
+        Returns:
+            (转换后的文件路径列表, 文件名映射字典)
+        """
+        converted_files = []
+        file_mapping = {}  # 转换后PDF文件名(无扩展名) -> 原始文件路径
+
+        for file_path in file_paths:
+            filename = os.path.basename(file_path)
+            name, ext = os.path.splitext(filename)
+            ext_lower = ext.lower()
+
+            if ext_lower in ['.doc', '.docx']:
+                # 转换Word文档
+                try:
+                    output_pdf_path = os.path.join(output_dir, f"{name}.pdf")
+                    word_to_pdf(file_path, output_pdf_path)
+                    converted_files.append(output_pdf_path)
+                    file_mapping[name] = file_path  # 建立映射关系
+                    print(f"Word文档转换成功: {filename} -> {name}.pdf")
+                except Exception as e:
+                    print(f"Word文档转换失败 {filename}: {str(e)}")
+                    # 转换失败时跳过该文件，不复制原文件，因为mineru无法处理doc/docx
+                    continue
+
+            elif ext_lower in ['.xls', '.xlsx']:
+                # 转换Excel文档
+                excel_to_pdf_2(file_path, output_dir)
+                output_pdf_path = os.path.join(output_dir, "output1.pdf")
+                # 重命名为原文件名
+                final_pdf_path = os.path.join(output_dir, f"{name}.pdf")
+                if os.path.exists(output_pdf_path):
+                    if os.path.exists(final_pdf_path):
+                        os.remove(final_pdf_path)
+                    os.rename(output_pdf_path, final_pdf_path)
+                    converted_files.append(final_pdf_path)
+                    file_mapping[name] = file_path  # 建立映射关系
+                    print(f"Excel文档转换成功: {filename} -> {name}.pdf")
+                else:
+                    raise Exception("PDF文件未生成")
+
+            elif ext_lower in ['.pdf', '.jpg', '.jpeg', '.png']:
+                # 直接复制PDF和图片文件
+                dest_path = os.path.join(output_dir, filename)
+                shutil.copy2(file_path, dest_path)
+                converted_files.append(dest_path)
+                # 对于直接复制的文件，也建立映射关系
+                file_mapping[name] = file_path
+                print(f"文件复制成功: {filename}")
+
+        return converted_files, file_mapping
 
     def _on_worker_finished(self, filename_str, data, success, error_msg):
         """处理工作线程完成事件"""
@@ -561,6 +731,15 @@ class UploadController(QObject):
 
     def _cleanup_after_success(self):
         """成功后的清理工作"""
+        # 清理转换文件夹
+        converted_dir = os.path.join(os.getcwd(), "converted_files")
+        if os.path.exists(converted_dir):
+            try:
+                shutil.rmtree(converted_dir)
+                print("清理转换文件夹成功")
+            except Exception as e:
+                print(f"清理转换文件夹失败: {str(e)}")
+
         self.clear_file_list()
         self.view.title.setText("数据审核工具 - 文件上传")
         self.file_processed.emit()
