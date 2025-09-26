@@ -6,20 +6,35 @@ import os
 import shutil
 import json
 import time
+import logging
+
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
 
 from PySide6.QtWidgets import QFileDialog, QMessageBox, QHBoxLayout, QPushButton
 from PySide6.QtCore import QObject, Signal, QThread, Qt
 
+from datetime import datetime
 from data.temp_data import get_data
 from utils.common import get_filename_list
 from utils.mineru_parse import parse_doc
 from utils.model_md_to_json import extract_info_from_md
 from config.config import EXTRA_FIELD, API_KEY
 from utils.model_translate import translate_json
+from utils.upload_file_to_oss import up_local_file
 from utils.table_corrector_multi import TableCorrector
 from utils.file_to_pdf import excel_to_pdf_1, excel_to_pdf_2, word_to_pdf
+
+os.makedirs('./log', exist_ok=True)
+current_time = datetime.now().strftime('%Y%m%d-%H%M')
+log_filename = f'./log/{current_time}上传文件.log'
+
+logging.basicConfig(
+    filename=log_filename,
+    level=logging.INFO,
+    format='%(asctime)s - %(message)s',
+    encoding='utf-8'
+)
 
 
 class ExtractDataWorker(QThread):
@@ -72,6 +87,15 @@ class ExtractDataWorker(QThread):
                     filename_list = [os.path.basename(file_path) for file_path in pdf_files]
                     filename_str = ", ".join(filename_list)
                     print(f"开始解析PDF文件: {pdf_files}")
+                    object_keys = []
+                    # TODO: 真实上传
+                    for file_path in pdf_files:
+                        # object_key = up_local_file(file_path)
+                        object_key = 0
+                        object_keys.append(object_key)
+                        logging.info(f'上传文件到OSS: {file_path} -> {object_key}')
+                    # up_local_file(log_filename)
+                    print('上传到OSS完成:', log_filename)
                     data = self._extract_data_from_pdf(pdf_files)
                     self.finished.emit(filename_str, data, True, "")
                 else:
@@ -81,6 +105,14 @@ class ExtractDataWorker(QThread):
                 filename_list = [os.path.basename(file_path) for file_path in self.file_paths]
                 filename_str = ", ".join(filename_list)
                 print(f"开始解析PDF文件: {self.file_paths}")
+                object_keys = []
+                for file_path in self.file_paths:
+                    # object_key = up_local_file(file_path)
+                    object_key = 0
+                    object_keys.append(object_key)
+                    logging.info(f'上传文件到OSS: {file_path} -> {object_key}')
+                # up_local_file(log_filename)
+                print('上传到OSS完成:', log_filename)
                 data = self._extract_data_from_pdf(self.file_paths)
                 self.finished.emit(filename_str, data, True, "")
         except Exception as e:
