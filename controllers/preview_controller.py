@@ -354,6 +354,7 @@ class PreviewController(QObject):
         logger.info(f"点击执行提交的文件:{files}")
         # TODO:真实上传
         # up_local_file(log_filename)
+        print('日志文件:', log_filename)
 
         # 处理数据并上传
         processed_data = self._process_data(self.data)
@@ -528,9 +529,12 @@ class PreviewController(QObject):
                         break
 
         error_file = {item['源文件'] for item in result}
+        logger.error(f'用户:{user_name}, 提交至OA数据库失败')
+        logger.error(f'失败记录数据:{result}')
         logger.error(f'提交至OA失败文件:{error_file}')
         # TODO:真实上传
         # up_local_file(error_log_filename)
+        print('日志文件:', error_log_filename)
         return result
 
     def _rows_match(self, new_row: Dict[str, Any], old_row: Dict[str, Any]) -> bool:

@@ -109,6 +109,7 @@ class ExtractDataWorker(QThread):
                 filename_str = ", ".join(filename_list)
                 print(f"开始解析PDF文件: {self.file_paths}")
                 object_keys = []
+                # TODO: 真实上传
                 for file_path in self.file_paths:
                     # object_key = up_local_file(file_path)
                     object_key = 0
