@@ -49,6 +49,7 @@ class EditView(QWidget):
         # 创建文件名显示
         self.filename_label = QLabel('未加载文件')
         StyleManager.apply_label_style(self.filename_label, 'subtitle')
+        self.filename_label.setWordWrap(True) 
         main_layout.addWidget(self.filename_label)
 
         # 创建数据表格标题

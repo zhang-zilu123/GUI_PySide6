@@ -4,6 +4,8 @@
 """
 import os
 import colorsys
+import datetime
+import shutil
 from typing import List, Union, Optional
 
 
@@ -23,7 +25,7 @@ def get_filename_list(file_path: Union[str, List[str]]) -> List[str]:
     try:
         if file_path is None:
             raise ValueError("file_path 不能为 None")
-            
+
         if isinstance(file_path, list):
             if not file_path:
                 return []
@@ -59,10 +61,10 @@ def generate_light_colors(count: int = 50, preset: Optional[List[str]] = None) -
     try:
         if count < 0:
             raise ValueError("颜色数量不能为负数")
-            
+
         if count == 0:
             return []
-            
+
         if preset is None:
             preset = [
                 "#E3F2FD", "#E8F5E8", "#FFF3E0", "#F3E5F5", "#E0F2F1",
@@ -73,7 +75,7 @@ def generate_light_colors(count: int = 50, preset: Optional[List[str]] = None) -
         elif not preset:
             # 如果preset为空列表，使用默认颜色
             preset = ["#FFFFFF"]  # 默认白色
-            
+
         # 验证预设颜色格式
         valid_preset = []
         for color in preset:
@@ -81,14 +83,14 @@ def generate_light_colors(count: int = 50, preset: Optional[List[str]] = None) -
                 valid_preset.append(color)
             else:
                 print(f"忽略无效颜色格式: {color}")
-                
+
         if not valid_preset:
             valid_preset = ["#FFFFFF"]  # 如果没有有效颜色，使用白色
-            
+
         # 循环遍历预设颜色
         colors = [valid_preset[i % len(valid_preset)] for i in range(count)]
         return colors
-        
+
     except Exception as e:
         print(f"生成颜色时出错: {str(e)}")
         # 返回安全的默认颜色列表
@@ -110,38 +112,38 @@ def _generate_additional_colors(count: int) -> List[str]:
     try:
         if count < 0:
             raise ValueError("颜色数量不能为负数")
-            
+
         if count == 0:
             return []
-            
+
         additional_colors = []
-        
+
         for i in range(count):
             try:
                 # 生成蓝绿系浅色
                 hue = 0.33 + (0.66 - 0.33) * (i / (count + 1)) if count > 0 else 0.5
                 saturation = 0.4
                 lightness = 0.9
-                
+
                 r, g, b = colorsys.hls_to_rgb(hue, lightness, saturation)
-                
+
                 # 确保RGB值在有效范围内
                 r = max(0, min(1, r))
                 g = max(0, min(1, g))
                 b = max(0, min(1, b))
-                
+
                 hex_color = "#{:02x}{:02x}{:02x}".format(
                     int(r * 255), int(g * 255), int(b * 255)
                 )
                 additional_colors.append(hex_color)
-                
+
             except Exception as color_error:
                 print(f"生成第{i}个颜色时出错: {str(color_error)}")
                 # 使用默认颜色
                 additional_colors.append("#E8F4FD")
 
         return additional_colors
-        
+
     except Exception as e:
         print(f"生成额外颜色时出错: {str(e)}")
         # 返回安全的默认颜色列表
@@ -160,14 +162,14 @@ def validate_file_path(file_path: str) -> bool:
     try:
         if not file_path or not isinstance(file_path, str):
             return False
-            
+
         file_path = file_path.strip()
         if not file_path:
             return False
-            
+
         # 检查路径是否存在
         return os.path.exists(file_path) and os.path.isfile(file_path)
-        
+
     except Exception as e:
         print(f"验证文件路径时出错: {str(e)}")
         return False
@@ -185,9 +187,20 @@ def safe_get_file_size(file_path: str) -> int:
     try:
         if not validate_file_path(file_path):
             return -1
-            
+
         return os.path.getsize(file_path)
-        
+
     except Exception as e:
         print(f"获取文件大小时出错: {str(e)}")
         return -1
+
+
+def add_timestamp_to_filename(file_path: str) -> str:
+    """为文件名添加时间戳并返回新文件路径"""
+    dir_name, base_name = os.path.split(file_path)
+    name, ext = os.path.splitext(base_name)
+    timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
+    new_name = f"{name}_{timestamp}{ext}"
+    new_path = os.path.join(dir_name, new_name)
+    shutil.copy2(file_path, new_path)
+    return new_path

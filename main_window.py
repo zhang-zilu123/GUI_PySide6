@@ -33,7 +33,7 @@ class MainWindow(QMainWindow):
         self.data_manager = DataManager()
 
         # 设置窗口标题和初始大小
-        self.setWindowTitle("数据审核工具")
+        self.setWindowTitle("费用识别工具V2.0")
         self.setGeometry(100, 100, 700, 500)
         self.resize(1500, 600)
 
@@ -78,8 +78,8 @@ class MainWindow(QMainWindow):
         # 将界面添加到标签页中
         self.tab_widget.addTab(self.upload_view, "上传文件")
         self.tab_widget.addTab(self.edit_view, "编辑数据")
-        self.tab_widget.addTab(self.preview_view, "预览上传")
-        self.tab_widget.addTab(self.history_view, "查看历史上传")
+        self.tab_widget.addTab(self.preview_view, "预览提交")
+        self.tab_widget.addTab(self.history_view, "查看历史提交")
 
         # 连接界面信号
         self._connect_signals()
