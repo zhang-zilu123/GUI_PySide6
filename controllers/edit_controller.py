@@ -204,23 +204,52 @@ class EditController(QObject):
         """
         print(f"点击了源文件列，行: {row}, 列: {column}")
 
-        # 获取该行的源文件值
-        item = self.view.data_table.item(row, column)
-        if not item:
-            return
+        try:
+            # 获取该行的源文件值
+            item = self.view.data_table.item(row, column)
+            if not item:
+                QMessageBox.warning(self.view, "警告", "无法获取源文件信息")
+                return
 
-        source_file = item.text()
-        print(f"源文件: {source_file}")
+            source_file = item.text().strip()
+            if not source_file:
+                QMessageBox.warning(self.view, "警告", "源文件路径为空")
+                return
 
-        if os.path.exists(source_file):
-            try:
-                os.startfile(source_file)
-            except Exception as e:
-                print(f"打开文件失败: {e}")
-                QMessageBox.warning(self.view, "错误", f"无法打开文件: {e}")
-        else:
-            print(f"文件不存在: {source_file}")
-            QMessageBox.warning(self.view, "警告", f"文件不存在: {source_file}")
+            print(f"源文件: {source_file}")
+
+            if os.path.exists(source_file):
+                try:
+                    os.startfile(source_file)
+                except Exception as e:
+                    error_msg = f"无法打开文件: {str(e)}\n\n可能原因：\n1. 文件被其他程序占用\n2. 没有安装对应的程序\n3. 文件权限不足"
+                    reply = QMessageBox.critical(
+                        self.view, 
+                        "打开文件失败", 
+                        error_msg + "\n\n是否要在文件管理器中显示该文件？",
+                        QMessageBox.Yes | QMessageBox.No
+                    )
+                    if reply == QMessageBox.Yes:
+                        try:
+                            # 在文件管理器中显示文件
+                            import subprocess
+                            subprocess.run(['explorer', '/select,', os.path.normpath(source_file)])
+                        except Exception as explorer_error:
+                            QMessageBox.warning(self.view, "错误", f"无法打开文件管理器: {str(explorer_error)}")
+            else:
+                reply = QMessageBox.warning(
+                    self.view, 
+                    "文件不存在", 
+                    f"文件不存在: {source_file}\n\n文件可能已被移动、删除或重命名。\n\n是否要从记录中移除该文件路径？",
+                    QMessageBox.Yes | QMessageBox.No
+                )
+                if reply == QMessageBox.Yes:
+                    item.setText("")  # 清空源文件路径
+                    self._collect_current_data()  # 更新数据
+                    QMessageBox.information(self.view, "提示", "已清空该记录的源文件路径")
+                    
+        except Exception as e:
+            QMessageBox.critical(self.view, "错误", f"处理源文件点击时发生错误: {str(e)}")
 
     def _on_context_menu_requested(self, pos) -> None:
         """处理右键菜单请求
@@ -258,25 +287,33 @@ class EditController(QObject):
 
     def _batch_edit_cells(self) -> None:
         """批量编辑选中的单元格"""
-        selected_items = self.view.data_table.selectedItems()
-        if not selected_items:
-            return
+        try:
+            selected_items = self.view.data_table.selectedItems()
+            if not selected_items:
+                QMessageBox.warning(self.view, "警告", "请先选择要编辑的单元格")
+                return
 
-        # 弹出输入对话框
-        text, ok = QInputDialog.getText(
-            self.view,
-            '批量修改',
-            f'请输入要设置的值（将应用到{len(selected_items)}个单元格）:'
-        )
+            # 弹出输入对话框
+            text, ok = QInputDialog.getText(
+                self.view,
+                '批量修改',
+                f'请输入要设置的值（将应用到{len(selected_items)}个单元格）:'
+            )
 
-        if ok:
-            # 批量设置值
-            for item in selected_items:
-                item.setText(text)
+            if ok and text is not None:
+                try:
+                    # 批量设置值
+                    for item in selected_items:
+                        if item:
+                            item.setText(text)
 
-            # 更新数据
-            self._collect_current_data()
-            QMessageBox.information(self.view, '提示', f'已批量修改{len(selected_items)}个单元格')
+                    # 更新数据
+                    self._collect_current_data()
+                    QMessageBox.information(self.view, '提示', f'已批量修改{len(selected_items)}个单元格')
+                except Exception as e:
+                    QMessageBox.critical(self.view, "错误", f"批量修改失败: {str(e)}")
+        except Exception as e:
+            QMessageBox.critical(self.view, "错误", f"批量编辑操作失败: {str(e)}")
 
     def _batch_clear_cells(self) -> None:
         """批量清空选中的单元格"""
@@ -397,47 +434,97 @@ class EditController(QObject):
             保存是否成功
         """
         try:
+            if not self.data:
+                QMessageBox.warning(self.view, "警告", "没有数据需要保存")
+                return False
+                
             temp_dir = "temp"
             if not os.path.exists(temp_dir):
-                os.makedirs(temp_dir)
+                try:
+                    os.makedirs(temp_dir)
+                except OSError as e:
+                    QMessageBox.critical(self.view, "错误", f"创建临时目录失败: {str(e)}")
+                    return False
+                    
             temp_path = os.path.join(temp_dir, "temp_data.json")
+
+            # 检查磁盘空间
+            try:
+                import shutil
+                free_space = shutil.disk_usage(temp_dir).free
+                if free_space < 1024 * 1024:  # 小于1MB
+                    QMessageBox.warning(self.view, "警告", "磁盘空间不足，无法保存数据")
+                    return False
+            except Exception:
+                pass  # 如果检查失败，继续尝试保存
 
             with open(temp_path, "w", encoding="utf-8") as f:
                 json.dump(self.data, f, ensure_ascii=False, indent=2)
+                
+            # 验证文件是否正确保存
+            if not os.path.exists(temp_path) or os.path.getsize(temp_path) == 0:
+                QMessageBox.critical(self.view, "错误", "数据保存失败，文件为空或未创建")
+                return False
+                
             return True
+        except PermissionError:
+            QMessageBox.critical(self.view, "错误", "没有权限保存到该位置，请检查文件夹权限")
+            return False
+        except OSError as e:
+            QMessageBox.critical(self.view, "错误", f"保存文件时发生系统错误: {str(e)}")
+            return False
+        except json.JSONEncodeError as e:
+            QMessageBox.critical(self.view, "错误", f"数据格式化失败: {str(e)}")
+            return False
         except Exception as e:
-            QMessageBox.critical(self.view, "错误", f"保存数据失败: {e}")
+            QMessageBox.critical(self.view, "错误", f"保存数据失败: {str(e)}")
             return False
 
     def _collect_current_data(self) -> None:
         """收集当前界面的数据"""
-        if not hasattr(self.view, "data_table"):
-            return
+        try:
+            if not hasattr(self.view, "data_table") or not self.view.data_table:
+                QMessageBox.warning(self.view, "错误", "数据表格未初始化")
+                return
 
-        data_list = []
-        row_count = self.view.data_table.rowCount()
-        col_count = self.view.data_table.columnCount()
+            data_list = []
+            row_count = self.view.data_table.rowCount()
+            col_count = self.view.data_table.columnCount()
 
-        for row in range(row_count):
-            row_data = {}
-            for col in range(col_count):
-                # 获取表头标题作为字段名称
-                header_item = self.view.data_table.horizontalHeaderItem(col)
-                if not header_item:
+            if row_count == 0:
+                self.data = []
+                return
+
+            for row in range(row_count):
+                row_data = {}
+                try:
+                    for col in range(col_count):
+                        # 获取表头标题作为字段名称
+                        header_item = self.view.data_table.horizontalHeaderItem(col)
+                        if not header_item:
+                            continue
+
+                        field_name = header_item.text()
+
+                        # 获取字段值
+                        value_item = self.view.data_table.item(row, col)
+                        field_value = value_item.text().strip() if value_item else ""
+
+                        # 更新数据
+                        row_data[field_name] = field_value
+                    
+                    if row_data:  # 只添加非空行
+                        data_list.append(row_data)
+                        
+                except Exception as e:
+                    print(f"收集第{row}行数据时出错: {str(e)}")
                     continue
 
-                field_name = header_item.text()
-
-                # 获取字段值
-                value_item = self.view.data_table.item(row, col)
-                field_value = value_item.text() if value_item else ""
-
-                # 更新数据
-                row_data[field_name] = field_value
-            data_list.append(row_data)
-
-        self.data = data_list
-        print(f"收集到的数据: {self.data}")
+            self.data = data_list
+            print(f"收集到的数据: {len(self.data)}行")
+        except Exception as e:
+            QMessageBox.critical(self.view, "错误", f"收集数据时发生错误: {str(e)}")
+            self.data = []
 
     # 可选的编辑模式切换方法（如果需要的话）
     def _on_edit_clicked(self) -> None:

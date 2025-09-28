@@ -41,11 +41,29 @@ class HistoryController(QObject):
 
     def _load_history(self) -> None:
         """加载历史记录列表"""
-        self.view.file_list.clear()
-        records = self.history_manager.load_upload_records()
+        try:
+            self.view.file_list.clear()
+            records = self.history_manager.load_upload_records()
+            
+            if not records:
+                # 添加一个提示项
+                no_data_item = QListWidgetItem("暂无历史记录")
+                no_data_item.setData(Qt.UserRole, None)
+                self.view.file_list.addItem(no_data_item)
+                return
 
-        for record in records:
-            self._create_history_item(record)
+            for record in records:
+                try:
+                    self._create_history_item(record)
+                except Exception as e:
+                    print(f"创建历史记录项失败: {str(e)}")
+                    continue
+                    
+        except Exception as e:
+            from PySide6.QtWidgets import QMessageBox
+            error_msg = f"加载历史记录失败: {str(e)}"
+            QMessageBox.warning(self.view, "加载失败", error_msg)
+            print(error_msg)
 
     def _create_history_item(self, record: Dict[str, Any]) -> None:
         """创建历史记录项
@@ -83,20 +101,32 @@ class HistoryController(QObject):
         Args:
             item: 选中的列表项
         """
-        record_info = item.data(Qt.UserRole)
-        if not record_info:
-            return
+        try:
+            record_info = item.data(Qt.UserRole)
+            if not record_info:
+                # 可能是"暂无历史记录"项
+                self._clear_data_table()
+                return
 
-        # 加载详细数据
-        record_detail = self._load_record_detail(record_info)
-        if not record_detail:
-            return
+            # 加载详细数据
+            record_detail = self._load_record_detail(record_info)
+            if not record_detail:
+                from PySide6.QtWidgets import QMessageBox
+                QMessageBox.warning(self.view, "加载失败", "无法加载该记录的详细信息，文件可能已被删除或损坏。")
+                self._clear_data_table()
+                return
 
-        # 更新文件名显示
-        self._update_filename_display(record_detail)
+            # 更新文件名显示
+            self._update_filename_display(record_detail)
 
-        # 更新右侧显示
-        self._update_data_table(record_detail)
+            # 更新右侧显示
+            self._update_data_table(record_detail)
+            
+        except Exception as e:
+            from PySide6.QtWidgets import QMessageBox
+            error_msg = f"选择记录时出错: {str(e)}"
+            QMessageBox.critical(self.view, "错误", error_msg)
+            print(error_msg)
 
     def _load_record_detail(self, record_info: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """加载记录详情
@@ -107,11 +137,21 @@ class HistoryController(QObject):
         Returns:
             记录详情或None
         """
-        file_path = record_info.get('file_path')
-        if not file_path:
-            return None
+        try:
+            file_path = record_info.get('file_path')
+            if not file_path:
+                print("记录信息中没有文件路径")
+                return None
             
-        return self.history_manager.load_record_detail(file_path)
+            import os
+            if not os.path.exists(file_path):
+                print(f"历史记录文件不存在: {file_path}")
+                return None
+                
+            return self.history_manager.load_record_detail(file_path)
+        except Exception as e:
+            print(f"加载记录详情失败: {str(e)}")
+            return None
 
     def _update_filename_display(self, record_detail: Dict[str, Any]) -> None:
         """更新文件名显示
@@ -129,16 +169,28 @@ class HistoryController(QObject):
         Args:
             record_detail: 记录详情
         """
-        data_list = record_detail.get('data', [])
+        try:
+            data_list = record_detail.get('data', [])
+            
+            if not data_list:
+                self._clear_data_table()
+                return
 
-        # 对数据按 is_error 排序，错误项在前
-        sorted_data = self._sort_data_by_error(data_list)
+            # 对数据按 is_error 排序，错误项在前
+            sorted_data = self._sort_data_by_error(data_list)
 
-        # 设置表格
-        self._setup_table(sorted_data)
+            # 设置表格
+            self._setup_table(sorted_data)
 
-        # 填充数据
-        self._populate_table_with_data(sorted_data)
+            # 填充数据
+            self._populate_table_with_data(sorted_data)
+            
+        except Exception as e:
+            from PySide6.QtWidgets import QMessageBox
+            error_msg = f"更新数据表格失败: {str(e)}"
+            QMessageBox.warning(self.view, "显示错误", error_msg)
+            print(error_msg)
+            self._clear_data_table()
 
     def _sort_data_by_error(self, data_list: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """按错误状态排序数据
@@ -208,3 +260,31 @@ class HistoryController(QObject):
             value = "上传失败" if value else "上传成功"
 
         return value
+
+    def _clear_data_table(self) -> None:
+        """清空数据表格"""
+        try:
+            self.view.data_table.setRowCount(0)
+            self.view.data_table.setColumnCount(len(HISTORY_FIELD))
+            self.view.data_table.setHorizontalHeaderLabels(HISTORY_FIELD)
+            
+            # 清空文件名显示
+            if hasattr(self.view, 'file_name_value'):
+                self.view.file_name_value.setText("请选择历史记录")
+        except Exception as e:
+            print(f"清空数据表格失败: {str(e)}")
+
+    def refresh_history_safe(self) -> bool:
+        """安全地刷新历史记录列表
+        
+        Returns:
+            刷新是否成功
+        """
+        try:
+            self._load_history()
+            return True
+        except Exception as e:
+            from PySide6.QtWidgets import QMessageBox
+            error_msg = f"刷新历史记录失败: {str(e)}"
+            QMessageBox.critical(self.view, "刷新失败", error_msg)
+            return False

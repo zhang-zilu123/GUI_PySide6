@@ -88,7 +88,7 @@ class UploadView(QWidget):
         <div style="font-size: 48px;">📁</div>
         <div style="font-size: 16px; color: #64748b;">点击或拖拽文件到此处上传</div>
         <div style="font-size: 12px; color: #94a3b8;">（不建议上传中英混杂的文件，容易出现解析错误）</div>   
-        <div style="font-size: 12px; color: #94a3b8;">支持格式: pdf、jpg、jpeg、png、doc、docx、xls、xlsx</div>
+        <div style="font-size: 12px; color: #94a3b8;">支持格式: pdf、jpg、jpeg、png、docx、xls、xlsx、rtf</div>
         """)
 
         # 将 QLabel 添加到布局中

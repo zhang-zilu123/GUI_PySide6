@@ -23,7 +23,7 @@ from config.config import EXTRA_FIELD, API_KEY
 from utils.model_translate import translate_json
 from utils.upload_file_to_oss import up_local_file
 from utils.table_corrector_multi import TableCorrector
-from utils.file_to_pdf import excel_to_pdf_1, excel_to_pdf_2, word_to_pdf
+from utils.file_to_pdf import excel_to_pdf, docx_to_pdf, rtf_to_pdf
 
 os.makedirs('./log', exist_ok=True)
 current_time = datetime.now().strftime('%Y%m%d-%H%M')
@@ -93,10 +93,16 @@ class ExtractDataWorker(QThread):
                     object_keys = []
                     # TODO: 真实上传
                     for file_path in pdf_files:
-                        # object_key = up_local_file(file_path)
-                        object_key = 0
-                        object_keys.append(object_key)
-                        logger.info(f'上传文件到OSS: {file_path} -> {object_key}')
+                        try:
+                            # object_key = up_local_file(file_path)
+                            object_key = 0
+                            object_keys.append(object_key)
+                            logger.info(f'上传文件到OSS: {file_path} -> {object_key}')
+                        except Exception as upload_error:
+                            error_msg = f"上传文件 {os.path.basename(file_path)} 到OSS失败: {str(upload_error)}"
+                            logger.error(error_msg)
+                            self.finished.emit("", [], False, error_msg)
+                            return
                     # up_local_file(log_filename)
                     print('上传到OSS完成:', log_filename)
                     data = self._extract_data_from_pdf(pdf_files)
@@ -111,10 +117,16 @@ class ExtractDataWorker(QThread):
                 object_keys = []
                 # TODO: 真实上传
                 for file_path in self.file_paths:
-                    # object_key = up_local_file(file_path)
-                    object_key = 0
-                    object_keys.append(object_key)
-                    logger.info(f'上传文件到OSS: {file_path} -> {object_key}')
+                    try:
+                        # object_key = up_local_file(file_path)
+                        object_key = 0
+                        object_keys.append(object_key)
+                        logger.info(f'上传文件到OSS: {file_path} -> {object_key}')
+                    except Exception as upload_error:
+                        error_msg = f"上传文件 {os.path.basename(file_path)} 到OSS失败: {str(upload_error)}"
+                        logger.error(error_msg)
+                        self.finished.emit("", [], False, error_msg)
+                        return
                 # up_local_file(log_filename)
                 print('上传到OSS完成:', log_filename)
                 data = self._extract_data_from_pdf(self.file_paths)
@@ -122,6 +134,7 @@ class ExtractDataWorker(QThread):
         except Exception as e:
             error_msg = f"处理文件时出错: {str(e)}"
             print(f"Error: {error_msg}")
+            logger.error(error_msg)
             self.finished.emit("", [], False, error_msg)
 
     def _extract_data_from_pdf(self, file_paths: List[str]) -> List[Dict[str, Any]]:
@@ -133,24 +146,57 @@ class ExtractDataWorker(QThread):
         Returns:
             提取的数据列表
         """
-        os.environ['MINERU_MODEL_SOURCE'] = 'local'
-        print(f'开始解析PDF文件: {file_paths}')
+        try:
+            fixed_paths = []
+            for path in file_paths:
+                if not os.path.exists(path):
+                    raise FileNotFoundError(f"文件不存在: {path}")
+                
+                root, ext = os.path.splitext(path)
+                if ext.isupper():
+                    new_path = root + ext.lower()
+                    if not os.path.exists(new_path):
+                        try:
+                            os.rename(path, new_path)
+                        except OSError as e:
+                            raise OSError(f"重命名文件失败 {path}: {str(e)}")
+                    fixed_paths.append(new_path)
+                else:
+                    fixed_paths.append(path)
 
-        # 解析PDF
-        start_time = time.time()
-        parse_doc(path_list=file_paths, output_dir="./output", backend="pipeline")
-        end_time = time.time()
-        print(f"PDF解析完成，耗时 {end_time - start_time:.2f} 秒")
+            file_paths = fixed_paths
+            os.environ['MINERU_MODEL_SOURCE'] = 'local'
+            print(f'开始解析PDF文件: {file_paths}')
+        except Exception as e:
+            error_msg = f"预处理文件失败: {str(e)}"
+            logger.error(error_msg)
+            raise Exception(error_msg)
 
-        # 处理解析结果
-        info_dict = self._process_parsed_results()
-        print('完成PDF文件解析', info_dict)
+        try:
+            # 解析PDF
+            start_time = time.time()
+            parse_doc(path_list=file_paths, output_dir="./output", backend="pipeline")
+            end_time = time.time()
+            print(f"PDF解析完成，耗时 {end_time - start_time:.2f} 秒")
 
-        # 清理临时文件
-        self._cleanup_temp_files()
+            # 处理解析结果
+            info_dict = self._process_parsed_results()
+            print('完成PDF文件解析', info_dict)
 
-        # 构建返回数据
-        return self._process_extracted_data(info_dict, file_paths, self.original_file_mapping)
+            # 清理临时文件
+            self._cleanup_temp_files()
+
+            # 构建返回数据
+            return self._process_extracted_data(info_dict, file_paths, self.original_file_mapping)
+        except Exception as e:
+            error_msg = f"PDF解析失败: {str(e)}"
+            logger.error(error_msg)
+            # 确保清理临时文件
+            try:
+                self._cleanup_temp_files()
+            except Exception as cleanup_error:
+                logger.error(f"清理临时文件失败: {str(cleanup_error)}")
+            raise Exception(error_msg)
 
     def _process_parsed_results(self) -> Dict[str, Any]:
         """处理解析结果
@@ -279,7 +325,15 @@ class UploadController(QObject):
     def _on_analyze_requested(self) -> None:
         """处理分析请求"""
         if not self.uploaded_files:
-            QMessageBox.warning(self.view, "提示", "请先上传文件")
+            reply = QMessageBox.warning(
+                self.view, 
+                "提示", 
+                "请先上传文件后再进行分析",
+                QMessageBox.Ok | QMessageBox.Cancel
+            )
+            if reply == QMessageBox.Ok:
+                # 确保按钮处于可用状态，允许用户重新上传
+                self._reset_button_states()
             return
 
         self._start_analysis()
@@ -290,7 +344,7 @@ class UploadController(QObject):
             self.view,
             "选择文件",
             "",
-            "支持的文件 (*.pdf *.jpg *.jpeg *.png *.doc *.docx *.xls *.xlsx);;所有文件 (*.*)"
+            "支持的文件 (*.pdf *.jpg *.jpeg *.png *.docx *.xls *.xlsx *.rtf);;所有文件 (*.*)"
         )
 
         if file_paths:
@@ -307,10 +361,11 @@ class UploadController(QObject):
 
         for file_path in file_paths:
             if self._validate_file(file_path):
-                if not self._is_file_already_uploaded(file_path):
-                    valid_files.append(file_path)
-                else:
-                    self._show_file_exists_message(file_path)
+                valid_files.append(file_path)
+                # if not self._is_file_already_uploaded(file_path):
+                #     valid_files.append(file_path)
+                # else:
+                #     self._show_file_exists_message(file_path)
             else:
                 invalid_files.append(file_path)
 
@@ -318,25 +373,38 @@ class UploadController(QObject):
 
     def _validate_file(self, file_path: str) -> bool:
         """验证文件格式
-        
+
         Args:
             file_path: 文件路径
-            
+
         Returns:
             文件是否有效
         """
-        if not os.path.isfile(file_path):
+        try:
+            if not os.path.isfile(file_path):
+                return False
+            
+            # 检查文件是否可读
+            try:
+                with open(file_path, 'rb') as f:
+                    # 尝试读取文件头部以确认文件完整性
+                    f.read(1024)
+            except (IOError, OSError):
+                return False
+            
+            _, ext = os.path.splitext(file_path)
+            valid_extensions = ['.pdf', '.jpg', '.jpeg', '.png', '.docx', '.xls', '.xlsx', '.rtf']
+            return ext.lower() in valid_extensions
+        except Exception as e:
+            print(f"文件验证异常 {file_path}: {str(e)}")
             return False
-        _, ext = os.path.splitext(file_path)
-        valid_extensions = ['.pdf', '.jpg', '.jpeg', '.png', '.doc', '.docx', '.xls', '.xlsx']
-        return ext.lower() in valid_extensions
 
     def _is_file_already_uploaded(self, file_path: str) -> bool:
         """检查文件是否已经上传
-        
+
         Args:
             file_path: 文件路径
-            
+
         Returns:
             文件是否已上传
         """
@@ -355,7 +423,7 @@ class UploadController(QObject):
 
     def _get_uploaded_file_names(self) -> List[str]:
         """获取已上传的文件名列表
-        
+
         Returns:
             已上传的文件名列表
         """
@@ -367,7 +435,7 @@ class UploadController(QObject):
 
     def _get_now_file_names(self) -> List[str]:
         """获取当前文件名列表
-        
+
         Returns:
             当前文件名列表
         """
@@ -377,7 +445,7 @@ class UploadController(QObject):
 
     def _show_file_exists_message(self, file_path: str) -> None:
         """显示文件已存在的消息
-        
+
         Args:
             file_path: 文件路径
         """
@@ -390,7 +458,7 @@ class UploadController(QObject):
 
     def _handle_file_validation_results(self, valid_files: List[str], invalid_files: List[str]) -> None:
         """处理文件验证结果
-        
+
         Args:
             valid_files: 有效文件列表
             invalid_files: 无效文件列表
@@ -402,16 +470,20 @@ class UploadController(QObject):
 
     def _show_invalid_files_message(self, invalid_files: List[str]) -> None:
         """显示无效文件消息
-        
+
         Args:
             invalid_files: 无效文件列表
         """
         invalid_names = [os.path.basename(fp) for fp in invalid_files]
-        QMessageBox.warning(
+        reply = QMessageBox.warning(
             self.view,
             "文件格式错误",
-            f"以下文件格式不支持:\n{', '.join(invalid_names)}\n\n请选择PDF, JPG, PNG, DOC, DOCX, XLS, XLSX格式的文件。"
+            f"以下文件格式不支持:\n{', '.join(invalid_names)}\n\n请选择PDF, JPG, PNG, DOCX, XLS, XLSX, RTF格式的文件。\n\n点击确定重新选择文件。",
+            QMessageBox.Ok | QMessageBox.Cancel
         )
+        if reply == QMessageBox.Ok:
+            # 确保按钮处于可用状态，允许用户重新上传
+            self._reset_button_states()
 
     # ==================== 文件列表管理 ====================
     def _add_files_to_list(self, file_paths):
@@ -562,7 +634,7 @@ class UploadController(QObject):
             <div style="font-size: 48px;">📁</div>
         <div style="font-size: 16px; color: #888;">点击或拖拽文件到此处上传</div>
         <div style="font-size: 12px; color: #888;">（不建议上传中英混杂的文件，容易出现解析错误）</div>   
-        <div style="font-size: 12px; color: #aaa;">支持格式: pdf、jpg、jpeg、png、doc、docx、xls、xlsx</div>
+        <div style="font-size: 12px; color: #aaa;">支持格式: pdf、jpg、jpeg、png、docx、xls、xlsx、rtf</div>
         """)
 
     def _set_processing_state(self, processing):
@@ -576,14 +648,14 @@ class UploadController(QObject):
     # ==================== 文件类型检测 ====================
     def _has_document_files(self, file_paths: List[str]) -> bool:
         """检测文件列表中是否包含文档文件
-        
+
         Args:
             file_paths: 文件路径列表
-            
+
         Returns:
-            如果包含doc, docx, xls, xlsx文件则返回True
+            如果包含docx, xls, xlsx, rtf文件则返回True
         """
-        document_extensions = ['.doc', '.docx', '.xls', '.xlsx']
+        document_extensions = ['.docx', '.xls', '.xlsx', '.rtf']
         for file_path in file_paths:
             _, ext = os.path.splitext(file_path)
             if ext.lower() in document_extensions:
@@ -592,17 +664,17 @@ class UploadController(QObject):
 
     def _separate_files_by_type(self, file_paths: List[str]) -> Dict[str, List[str]]:
         """按文件类型分离文件
-        
+
         Args:
             file_paths: 文件路径列表
-            
+
         Returns:
             包含不同类型文件的字典
         """
         document_files = []
         pdf_image_files = []
 
-        document_extensions = ['.doc', '.docx', '.xls', '.xlsx']
+        document_extensions = ['.docx', '.xls', '.xlsx', '.rtf']
         pdf_image_extensions = ['.pdf', '.jpg', '.jpeg', '.png']
 
         for file_path in file_paths:
@@ -651,6 +723,11 @@ class UploadController(QObject):
             # 转换文档并复制文件
             converted_files, file_mapping = self._convert_documents_and_copy_files(self.uploaded_files, output_dir)
 
+            if not converted_files:
+                error_msg = "没有成功转换任何文件，请检查文件是否损坏或格式是否正确"
+                self._handle_extraction_error(error_msg)
+                return
+
             # 使用转换后的目录进行分析（处理目录中所有PDF文件）
             worker = ExtractDataWorker([output_dir], process_directory=True, original_file_mapping=file_mapping)
             worker.finished.connect(self._on_worker_finished)
@@ -659,16 +736,18 @@ class UploadController(QObject):
 
         except Exception as e:
             error_msg = f"文档转换失败: {str(e)}"
+            print(f"Error: {error_msg}")
+            logger.error(error_msg)
             self._handle_extraction_error(error_msg)
 
     def _convert_documents_and_copy_files(self, file_paths: List[str], output_dir: str) -> Tuple[
         List[str], Dict[str, str]]:
         """转换文档文件并复制其他文件到输出目录
-        
+
         Args:
             file_paths: 原始文件路径列表
             output_dir: 输出目录
-            
+
         Returns:
             (转换后的文件路径列表, 文件名映射字典)
         """
@@ -680,43 +759,97 @@ class UploadController(QObject):
             name, ext = os.path.splitext(filename)
             ext_lower = ext.lower()
 
-            if ext_lower in ['.doc', '.docx']:
+            if ext_lower in ['.docx']:
                 # 转换Word文档
                 try:
+                    if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
+                        raise ValueError(f"Word文档文件不存在或为空: {filename}")
+                    
                     output_pdf_path = os.path.join(output_dir, f"{name}.pdf")
-                    word_to_pdf(file_path, output_pdf_path)
+                    docx_to_pdf(file_path, output_pdf_path)
+                    
+                    # 检查转换结果
+                    if not os.path.exists(output_pdf_path) or os.path.getsize(output_pdf_path) == 0:
+                        raise ValueError(f"Word文档转换后的PDF文件为空或未生成")
+                    
                     converted_files.append(output_pdf_path)
                     file_mapping[name] = file_path  # 建立映射关系
                     print(f"Word文档转换成功: {filename} -> {name}.pdf")
+                    logger.info(f"Word文档转换成功: {filename} -> {name}.pdf")
                 except Exception as e:
-                    print(f"Word文档转换失败 {filename}: {str(e)}")
+                    error_msg = f"Word文档转换失败 {filename}: {str(e)}"
+                    print(error_msg)
+                    logger.error(error_msg)
                     # 转换失败时跳过该文件，不复制原文件，因为mineru无法处理doc/docx
                     continue
 
             elif ext_lower in ['.xls', '.xlsx']:
-                # 转换Excel文档
-                excel_to_pdf_2(file_path, output_dir)
-                output_pdf_path = os.path.join(output_dir, "output1.pdf")
-                # 重命名为原文件名
-                final_pdf_path = os.path.join(output_dir, f"{name}.pdf")
-                if os.path.exists(output_pdf_path):
-                    if os.path.exists(final_pdf_path):
-                        os.remove(final_pdf_path)
-                    os.rename(output_pdf_path, final_pdf_path)
-                    converted_files.append(final_pdf_path)
+                try:
+                    if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
+                        raise ValueError(f"Excel文档文件不存在或为空: {filename}")
+                    
+                    output_pdf_path = excel_to_pdf(file_path, output_dir)
+                    
+                    # 检查转换结果
+                    if not os.path.exists(output_pdf_path) or os.path.getsize(output_pdf_path) == 0:
+                        raise ValueError(f"Excel文档转换后的PDF文件为空或未生成")
+                    
+                    converted_files.append(output_pdf_path)
                     file_mapping[name] = file_path  # 建立映射关系
                     print(f"Excel文档转换成功: {filename} -> {name}.pdf")
-                else:
-                    raise Exception("PDF文件未生成")
+                    logger.info(f"Excel文档转换成功: {filename} -> {name}.pdf")
+                except Exception as e:
+                    error_msg = f"Excel文档转换失败 {filename}: {str(e)}"
+                    print(error_msg)
+                    logger.error(error_msg)
+                    # 转换失败时跳过该文件
+                    continue
+
+            elif ext_lower in ['.rtf']:
+                try:
+                    if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
+                        raise ValueError(f"RTF文档文件不存在或为空: {filename}")
+                    
+                    output_pdf_path = os.path.join(output_dir, f"{name}.pdf")
+                    rtf_to_pdf(file_path, output_pdf_path)
+                    
+                    # 检查转换结果
+                    if not os.path.exists(output_pdf_path) or os.path.getsize(output_pdf_path) == 0:
+                        raise ValueError(f"RTF文档转换后的PDF文件为空或未生成")
+                    
+                    converted_files.append(output_pdf_path)
+                    file_mapping[name] = file_path  # 建立映射关系
+                    print(f"RTF文档转换成功: {filename} -> {name}.pdf")
+                    logger.info(f"RTF文档转换成功: {filename} -> {name}.pdf")
+                except Exception as e:
+                    error_msg = f"RTF文档转换失败 {filename}: {str(e)}"
+                    print(error_msg)
+                    logger.error(error_msg)
+                    continue
 
             elif ext_lower in ['.pdf', '.jpg', '.jpeg', '.png']:
                 # 直接复制PDF和图片文件
-                dest_path = os.path.join(output_dir, filename)
-                shutil.copy2(file_path, dest_path)
-                converted_files.append(dest_path)
-                # 对于直接复制的文件，也建立映射关系
-                file_mapping[name] = file_path
-                print(f"文件复制成功: {filename}")
+                try:
+                    if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
+                        raise ValueError(f"文件不存在或为空: {filename}")
+                    
+                    dest_path = os.path.join(output_dir, filename)
+                    shutil.copy2(file_path, dest_path)
+                    
+                    # 检查复制结果
+                    if not os.path.exists(dest_path) or os.path.getsize(dest_path) == 0:
+                        raise ValueError(f"文件复制失败或复制后文件为空: {filename}")
+                    
+                    converted_files.append(dest_path)
+                    # 对于直接复制的文件，也建立映射关系
+                    file_mapping[name] = file_path
+                    print(f"文件复制成功: {filename}")
+                    logger.info(f"文件复制成功: {filename}")
+                except Exception as e:
+                    error_msg = f"文件复制失败 {filename}: {str(e)}"
+                    print(error_msg)
+                    logger.error(error_msg)
+                    continue
 
         return converted_files, file_mapping
 
@@ -783,7 +916,17 @@ class UploadController(QObject):
     def _handle_extraction_error(self, error_msg):
         """处理提取错误"""
         self.view.title.setText("数据审核工具 - 文件上传")
-        QMessageBox.critical(self.view, "提取失败", error_msg)
+        reply = QMessageBox.critical(
+            self.view, 
+            "分析失败", 
+            f"{error_msg}\n\n点击确定重新尝试上传和分析文件。",
+            QMessageBox.Ok | QMessageBox.Cancel
+        )
+        if reply == QMessageBox.Ok:
+            # 重新启用所有按钮，允许用户重新操作
+            self._reset_button_states()
+            # 清理可能存在的转换文件夹
+            self._cleanup_conversion_files()
 
     # ==================== 公共接口 ====================
     def add_uploaded_file(self, file_paths):
@@ -803,3 +946,42 @@ class UploadController(QObject):
     def hide_file_list(self):
         """隐藏文件列表（公共接口）"""
         self._reset_to_initial_state()
+
+    # ==================== 错误处理辅助方法 ====================
+    def _reset_button_states(self):
+        """重置按钮状态为可用"""
+        try:
+            self.view.upload_button.setEnabled(True)
+            self.view.analyze_button.setEnabled(True)
+            self.view.clear_button.setEnabled(True)
+            self.view.upload_frame.setEnabled(True)
+        except Exception as e:
+            print(f"重置按钮状态失败: {str(e)}")
+
+    def _cleanup_conversion_files(self):
+        """清理转换文件夹"""
+        converted_dir = os.path.join(os.getcwd(), "converted_files")
+        if os.path.exists(converted_dir):
+            try:
+                shutil.rmtree(converted_dir)
+                print("清理转换文件夹成功")
+            except Exception as e:
+                print(f"清理转换文件夹失败: {str(e)}")
+                logger.error(f"清理转换文件夹失败: {str(e)}")
+
+    def _show_processing_error(self, error_msg: str, title: str = "处理错误"):
+        """显示处理错误对话框
+        
+        Args:
+            error_msg: 错误消息
+            title: 对话框标题
+        """
+        reply = QMessageBox.critical(
+            self.view,
+            title,
+            f"{error_msg}\n\n是否要重新尝试？",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if reply == QMessageBox.Yes:
+            self._reset_button_states()
+        return reply == QMessageBox.Yes
