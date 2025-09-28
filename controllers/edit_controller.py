@@ -400,7 +400,8 @@ class EditController(QObject):
     def set_data(self) -> None:
         """设置要编辑的数据"""
         # 更新编辑视图中的数据展示
-        self.data_display(self.data_manager.current_data)
+        data = self.data_manager.current_data
+        self.data_display(data)
 
     def _on_finish_clicked(self) -> None:
         """处理完成按钮点击事件"""

@@ -20,6 +20,7 @@ from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkRe
 from config.config import SUBMIT_FIELD
 from data.history_manager import HistoryManager
 from data.token_manager import token_manager
+from utils.upload_file_to_oss import up_local_file
 
 os.makedirs("./log", exist_ok=True)
 current_time = datetime.now().strftime("%Y%m%d-%H%M")
@@ -323,11 +324,11 @@ class PreviewController(QObject):
             reply = QMessageBox.question(
                 self.view,
                 "确认上传",
-                f"确定要上传 {len(self.data)} 条记录到服务器吗？\n\n注意：上传后将无法撤销。",
+                f"确定要上传 {len(self.data)} 条记录到OA吗？\n\n注意：上传后将无法撤销。",
                 QMessageBox.Yes | QMessageBox.No,
                 QMessageBox.No
             )
-            
+
             if reply != QMessageBox.Yes:
                 return
 
@@ -337,7 +338,7 @@ class PreviewController(QObject):
 
             # 执行上传
             self._perform_upload()
-            
+
         except Exception as e:
             error_msg = f"上传操作失败: {str(e)}"
             QMessageBox.critical(self.view, "上传错误", error_msg)
@@ -357,8 +358,8 @@ class PreviewController(QObject):
             token = token_manager.token
             if token is None or token == "" or token.strip() == "":
                 reply = QMessageBox.warning(
-                    self.view, 
-                    "未登录", 
+                    self.view,
+                    "未登录",
                     "请先登录系统后再进行数据上传。\n\n点击确定打开登录窗口。",
                     QMessageBox.Ok | QMessageBox.Cancel
                 )
@@ -379,43 +380,43 @@ class PreviewController(QObject):
         try:
             if not self.data:
                 reply = QMessageBox.warning(
-                    self.view, 
-                    "无数据", 
+                    self.view,
+                    "无数据",
                     "没有数据可以上传。\n\n请先在前面的步骤中上传和编辑文件。",
                     QMessageBox.Ok
                 )
                 return False
-                
+
             # 检查数据格式
             required_fields = ["外销合同", "船代公司", "费用名称", "货币代码", "金额"]
             invalid_rows = []
-            
+
             for i, item in enumerate(self.data):
                 missing_fields = []
                 for field in required_fields:
                     if field not in item or str(item[field]).strip() == "":
                         missing_fields.append(field)
-                
+
                 if missing_fields:
-                    invalid_rows.append(f"第{i+1}行缺少: {', '.join(missing_fields)}")
-                    
+                    invalid_rows.append(f"第{i + 1}行缺少: {', '.join(missing_fields)}")
+
                 # 验证金额字段
                 try:
                     amount = item.get("金额", "")
                     if amount != "":
                         float(amount)
                 except ValueError:
-                    invalid_rows.append(f"第{i+1}行金额格式错误: {amount}")
-            
+                    invalid_rows.append(f"第{i + 1}行金额格式错误: {amount}")
+
             if invalid_rows:
                 error_msg = "发现以下数据问题:\n\n" + "\n".join(invalid_rows[:10])
                 if len(invalid_rows) > 10:
                     error_msg += f"\n... 还有 {len(invalid_rows) - 10} 个问题"
                 error_msg += "\n\n请返回编辑界面修正数据后再试。"
-                
+
                 QMessageBox.warning(self.view, "数据验证失败", error_msg)
                 return False
-                
+
             return True
         except Exception as e:
             QMessageBox.critical(self.view, "数据验证错误", f"验证数据时出错: {str(e)}")
@@ -429,12 +430,13 @@ class PreviewController(QObject):
         print("准备上传数据:", self.data)
         files = {item["源文件"] for item in self.data}
         logger.info(f"点击执行提交的文件:{files}")
-        # TODO:真实上传
-        # up_local_file(log_filename)
-        print('日志文件:', log_filename)
 
         # 处理数据并上传
         processed_data = self._process_data(self.data)
+        # TODO:真实上传
+        logger.info(f"上传的数据:{processed_data}")
+        up_local_file(log_filename)
+        print('日志文件:', log_filename)
         upload_result = self._upload_to_server(processed_data)
 
         if upload_result is not None:
@@ -457,7 +459,7 @@ class PreviewController(QObject):
             上传结果或None（如果失败）
         """
         API_URL = "http://47.100.46.227:5586/api/internal/cost_ident/upload_oa"
-        
+
         try:
             # 检查网络连接
             try:
@@ -466,71 +468,71 @@ class PreviewController(QObject):
             except Exception:
                 reply = QMessageBox.critical(
                     self.view,
-                    "网络连接失败", 
+                    "网络连接失败",
                     "无法连接到服务器，请检查网络连接。\n\n是否要重试？",
                     QMessageBox.Retry | QMessageBox.Cancel
                 )
                 if reply == QMessageBox.Retry:
                     return self._upload_to_server(processed_data)
                 return None
-            
+
             headers = {"Authorization": f"Bearer {token_manager.token}"}
 
             response = requests.post(
-                API_URL, 
-                json=processed_data, 
+                API_URL,
+                json=processed_data,
                 headers=headers,
                 timeout=30  # 30秒超时
             )
-            
+
             # 检查HTTP状态码
             if response.status_code == 401:
                 QMessageBox.critical(
-                    self.view, 
-                    "认证失败", 
+                    self.view,
+                    "认证失败",
                     "登录已过期，请重新登录后再试。"
                 )
                 return None
             elif response.status_code == 403:
                 QMessageBox.critical(
-                    self.view, 
-                    "权限不足", 
+                    self.view,
+                    "权限不足",
                     "您没有权限进行此操作，请联系管理员。"
                 )
                 return None
             elif response.status_code >= 500:
                 QMessageBox.critical(
-                    self.view, 
-                    "服务器错误", 
+                    self.view,
+                    "服务器错误",
                     f"服务器内部错误 (状态码: {response.status_code})，请稍后重试。"
                 )
                 return None
             elif response.status_code != 200:
                 QMessageBox.critical(
-                    self.view, 
-                    "上传失败", 
+                    self.view,
+                    "上传失败",
                     f"上传请求失败 (状态码: {response.status_code})，请重新尝试。"
                 )
                 return None
-                
+
             try:
                 result = response.json()
             except json.JSONDecodeError as e:
                 QMessageBox.critical(
-                    self.view, 
-                    "响应解析错误", 
+                    self.view,
+                    "响应解析错误",
                     f"服务器响应格式错误: {str(e)}"
                 )
                 return None
-                
+
             print("上传接口响应:", result)
             logger.info(f"上传接口响应: {result}")
             return result
-            
+
         except requests.exceptions.Timeout:
             reply = QMessageBox.critical(
                 self.view,
-                "上传超时", 
+                "上传超时",
                 "上传请求超时，可能是网络较慢或服务器繁忙。\n\n是否要重试？",
                 QMessageBox.Retry | QMessageBox.Cancel
             )
@@ -540,14 +542,13 @@ class PreviewController(QObject):
         except requests.exceptions.ConnectionError:
             QMessageBox.critical(
                 self.view,
-                "连接错误", 
+                "连接错误",
                 "无法连接到服务器，请检查网络连接后重试。"
             )
             return None
         except Exception as e:
             error_msg = f"上传请求失败: {str(e)}"
             QMessageBox.critical(self.view, "上传错误", f"{error_msg}\n\n请检查网络连接后重新尝试。")
-            logger.error(error_msg)
             return None
 
     def _handle_upload_result(
@@ -626,7 +627,7 @@ class PreviewController(QObject):
             if not save_data:
                 print("没有数据需要保存记录")
                 return
-                
+
             record_path = self.history_manager.save_upload_record(
                 file_name=self.data_manager.file_name,
                 data=save_data,
@@ -636,8 +637,6 @@ class PreviewController(QObject):
         except Exception as e:
             error_msg = f"保存上传记录失败: {str(e)}"
             print(error_msg)
-            logger.error(error_msg)
-            # 不显示错误对话框，因为这不是关键错误，不应该阻止用户操作
 
     def _process_data(self, data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """处理数据格式以符合API要求
@@ -700,7 +699,7 @@ class PreviewController(QObject):
         logger.error(f'失败记录数据:{result}')
         logger.error(f'提交至OA失败文件:{error_file}')
         # TODO:真实上传
-        # up_local_file(error_log_filename)
+        up_local_file(error_log_filename)
         print('日志文件:', error_log_filename)
         return result
 
