@@ -27,12 +27,12 @@ def get_filename_list(file_path: Union[str, List[str]]) -> List[str]:
 
 
 def generate_light_colors(count: int = 50, preset: Optional[List[str]] = None) -> List[str]:
-    """生成浅色系颜色，前几个用预设颜色，剩下的自动生成
-    
+    """生成浅色系颜色，循环使用预设颜色
+
     Args:
         count: 需要生成的颜色数量
         preset: 预设颜色列表
-        
+
     Returns:
         生成的颜色列表（十六进制格式）
     """
@@ -41,16 +41,9 @@ def generate_light_colors(count: int = 50, preset: Optional[List[str]] = None) -
             "#E3F2FD", "#E8F5E8", "#FFF3E0", "#F3E5F5", "#E0F2F1",
             "#FCE4EC", "#F1F8E9", "#EFEBE9", "#FAFAFA", "#E8EAF6"
         ]
-
-    # 使用预设颜色
-    colors = preset[:min(count, len(preset))]
-
-    # 如果需要更多颜色，自动生成
-    remaining_count = count - len(colors)
-    if remaining_count > 0:
-        colors.extend(_generate_additional_colors(remaining_count))
-
-    return colors[:count]
+    # 循环遍历预设颜色
+    colors = [preset[i % len(preset)] for i in range(count)]
+    return colors
 
 
 def _generate_additional_colors(count: int) -> List[str]:
