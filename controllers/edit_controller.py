@@ -76,7 +76,7 @@ class EditController(QObject):
         Args:
             data: 要显示的数据列表
         """
-        data_list = self.data_manager.current_data
+        data_list = data
         if not data_list:
             return
 
@@ -224,8 +224,8 @@ class EditController(QObject):
                 except Exception as e:
                     error_msg = f"无法打开文件: {str(e)}\n\n可能原因：\n1. 文件被其他程序占用\n2. 没有安装对应的程序\n3. 文件权限不足"
                     reply = QMessageBox.critical(
-                        self.view, 
-                        "打开文件失败", 
+                        self.view,
+                        "打开文件失败",
                         error_msg + "\n\n是否要在文件管理器中显示该文件？",
                         QMessageBox.Yes | QMessageBox.No
                     )
@@ -238,8 +238,8 @@ class EditController(QObject):
                             QMessageBox.warning(self.view, "错误", f"无法打开文件管理器: {str(explorer_error)}")
             else:
                 reply = QMessageBox.warning(
-                    self.view, 
-                    "文件不存在", 
+                    self.view,
+                    "文件不存在",
                     f"文件不存在: {source_file}\n\n文件可能已被移动、删除或重命名。\n\n是否要从记录中移除该文件路径？",
                     QMessageBox.Yes | QMessageBox.No
                 )
@@ -247,7 +247,7 @@ class EditController(QObject):
                     item.setText("")  # 清空源文件路径
                     self._collect_current_data()  # 更新数据
                     QMessageBox.information(self.view, "提示", "已清空该记录的源文件路径")
-                    
+
         except Exception as e:
             QMessageBox.critical(self.view, "错误", f"处理源文件点击时发生错误: {str(e)}")
 
@@ -397,15 +397,10 @@ class EditController(QObject):
 
         self._collect_current_data()
 
-    def set_data(self, data: List[Dict[str, Any]]) -> None:
-        """设置要编辑的数据
-
-        Args:
-            data: 要设置的数据
-        """
-        self.data = data
+    def set_data(self) -> None:
+        """设置要编辑的数据"""
         # 更新编辑视图中的数据展示
-        self.data_display(data)
+        self.data_display(self.data_manager.current_data)
 
     def _on_finish_clicked(self) -> None:
         """处理完成按钮点击事件"""
@@ -437,7 +432,7 @@ class EditController(QObject):
             if not self.data:
                 QMessageBox.warning(self.view, "警告", "没有数据需要保存")
                 return False
-                
+
             temp_dir = "temp"
             if not os.path.exists(temp_dir):
                 try:
@@ -445,7 +440,7 @@ class EditController(QObject):
                 except OSError as e:
                     QMessageBox.critical(self.view, "错误", f"创建临时目录失败: {str(e)}")
                     return False
-                    
+
             temp_path = os.path.join(temp_dir, "temp_data.json")
 
             # 检查磁盘空间
@@ -460,12 +455,12 @@ class EditController(QObject):
 
             with open(temp_path, "w", encoding="utf-8") as f:
                 json.dump(self.data, f, ensure_ascii=False, indent=2)
-                
+
             # 验证文件是否正确保存
             if not os.path.exists(temp_path) or os.path.getsize(temp_path) == 0:
                 QMessageBox.critical(self.view, "错误", "数据保存失败，文件为空或未创建")
                 return False
-                
+
             return True
         except PermissionError:
             QMessageBox.critical(self.view, "错误", "没有权限保存到该位置，请检查文件夹权限")
@@ -512,10 +507,10 @@ class EditController(QObject):
 
                         # 更新数据
                         row_data[field_name] = field_value
-                    
+
                     if row_data:  # 只添加非空行
                         data_list.append(row_data)
-                        
+
                 except Exception as e:
                     print(f"收集第{row}行数据时出错: {str(e)}")
                     continue

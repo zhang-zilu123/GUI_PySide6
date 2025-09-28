@@ -147,7 +147,7 @@ class MainWindow(QMainWindow):
         """处理分析完成事件"""
         self.status_bar.showMessage("文件处理完成")
         # 切换到编辑界面并传递所有数据
-        self.edit_controller.set_data(self.processed_files_data)
+        self.edit_controller.set_data()
         self.tab_widget.setCurrentWidget(self.edit_view)
         # 清空已处理的数据列表，为下一次处理做准备
         self.processed_files_data.clear()
