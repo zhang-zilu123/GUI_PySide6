@@ -685,7 +685,10 @@ class TableCorrector:
 def main():
     """主函数"""
     # 配置
-    API_KEY = "sk-ca1bef1139754026b86788af0dbbbbd4"
+    from dotenv import load_dotenv
+    load_dotenv()
+    import os
+    API_KEY = os.getenv("DASHSCOPE_API_KEY1")
     current_dir = Path(__file__).resolve().parents[1]
     OUTPUT_DIR = current_dir / "output"
     # OUTPUT_DIR = Path("output")  # MinerU输出目录
@@ -698,8 +701,6 @@ def main():
         print("请先设置正确的API密钥")
         return
 
-    # 处理单个文件夹（测试用）
-    print('sdfds', OUTPUT_DIR)
     # 创建纠错器
     corrector = TableCorrector(API_KEY)
 

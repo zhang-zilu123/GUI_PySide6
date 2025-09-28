@@ -62,6 +62,3 @@ CORRECTION_PROMPT = """
 
 
 """
-
-# API_KEY
-API_KEY = "sk-ca1bef1139754026b86788af0dbbbbd4"

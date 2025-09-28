@@ -7,11 +7,9 @@ from typing import Optional
 from random import choice
 
 from openai import OpenAI
+from dotenv import load_dotenv
 
-# 配置API密钥
-os.environ["DASHSCOPE_API_KEY1"] = "sk-ca1bef1139754026b86788af0dbbbbd4"
-os.environ["DASHSCOPE_API_KEY2"] = "sk-381d3df1c3ee4623bb9a1b9c767f7b5e"
-os.environ["DASHSCOPE_API_KEY3"] = "sk-22d825174e1143d8ba6822880addf9ea"
+load_dotenv()
 
 # API密钥池
 DASH_KEYS = [
