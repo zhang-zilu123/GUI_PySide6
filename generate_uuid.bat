@@ -19,4 +19,4 @@ if "%MACHINE_UUID%"=="" (
 
 REM 保存到本地文件
 echo %IDENTIFIER% > "%~dp0device_id.txt"
-echo 设备唯一标识已生成: %IDENTIFIER%
+echo The unique device identifier has been generated: %IDENTIFIER%
