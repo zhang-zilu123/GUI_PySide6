@@ -433,9 +433,7 @@ class PreviewController(QObject):
 
         # 处理数据并上传
         processed_data = self._process_data(self.data)
-        # TODO:真实上传
         logger.info(f"上传的数据:{processed_data}")
-        up_local_file(log_filename)
         print('日志文件:', log_filename)
         upload_result = self._upload_to_server(processed_data)
 
@@ -464,7 +462,7 @@ class PreviewController(QObject):
             # 检查网络连接
             try:
                 import urllib.request
-                urllib.request.urlopen("http://47.100.46.227:5586", timeout=5)
+                urllib.request.urlopen("http://47.100.46.227:5586", timeout=30)
             except Exception:
                 reply = QMessageBox.critical(
                     self.view,
@@ -472,6 +470,7 @@ class PreviewController(QObject):
                     "无法连接到服务器，请检查网络连接。\n\n是否要重试？",
                     QMessageBox.Retry | QMessageBox.Cancel
                 )
+                logger.info("网络连接失败，无法连接到服务器")
                 if reply == QMessageBox.Retry:
                     return self._upload_to_server(processed_data)
                 return None
@@ -482,39 +481,8 @@ class PreviewController(QObject):
                 API_URL,
                 json=processed_data,
                 headers=headers,
-                timeout=30  # 30秒超时
+                timeout=300
             )
-
-            # 检查HTTP状态码
-            if response.status_code == 401:
-                QMessageBox.critical(
-                    self.view,
-                    "认证失败",
-                    "登录已过期，请重新登录后再试。"
-                )
-                return None
-            elif response.status_code == 403:
-                QMessageBox.critical(
-                    self.view,
-                    "权限不足",
-                    "您没有权限进行此操作，请联系管理员。"
-                )
-                return None
-            elif response.status_code >= 500:
-                QMessageBox.critical(
-                    self.view,
-                    "服务器错误",
-                    f"服务器内部错误 (状态码: {response.status_code})，请稍后重试。"
-                )
-                return None
-            elif response.status_code != 200:
-                QMessageBox.critical(
-                    self.view,
-                    "上传失败",
-                    f"上传请求失败 (状态码: {response.status_code})，请重新尝试。"
-                )
-                return None
-
             try:
                 result = response.json()
             except json.JSONDecodeError as e:
@@ -524,8 +492,6 @@ class PreviewController(QObject):
                     f"服务器响应格式错误: {str(e)}"
                 )
                 return None
-
-            print("上传接口响应:", result)
             logger.info(f"上传接口响应: {result}")
             return result
 
@@ -536,15 +502,9 @@ class PreviewController(QObject):
                 "上传请求超时，可能是网络较慢或服务器繁忙。\n\n是否要重试？",
                 QMessageBox.Retry | QMessageBox.Cancel
             )
+            logger.info(f"上传请求超时")
             if reply == QMessageBox.Retry:
                 return self._upload_to_server(processed_data)
-            return None
-        except requests.exceptions.ConnectionError:
-            QMessageBox.critical(
-                self.view,
-                "连接错误",
-                "无法连接到服务器，请检查网络连接后重试。"
-            )
             return None
         except Exception as e:
             error_msg = f"上传请求失败: {str(e)}"
@@ -634,6 +594,8 @@ class PreviewController(QObject):
             )
             print(f"上传记录已保存: {record_path}")
             logger.info(f"上传记录已保存: {record_path}")
+            # TODO:真实上传
+            up_local_file(log_filename)
         except Exception as e:
             error_msg = f"保存上传记录失败: {str(e)}"
             print(error_msg)
