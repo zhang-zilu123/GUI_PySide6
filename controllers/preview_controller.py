@@ -44,8 +44,6 @@ with open("./device_id.txt", "r", encoding="utf-8") as f:
     content = f.read()
     logger.info(f"device_id:{content}")
 
-user_name = ""
-
 
 class LoginDialog(QDialog):
     """登录弹窗，包含WebEngineView用于扫码登录操作"""
@@ -196,6 +194,7 @@ class LoginDialog(QDialog):
                 response = requests.get(api_url, headers=headers)
                 user_name = response.json()["user_name"]
                 logger.info(f"user_name:{user_name}")
+                logger.error(f'用户:{user_name}, 提交至OA数据库失败')
                 self.accept()
             else:
                 raise ValueError(data.get("message", "登录失败"))
@@ -256,19 +255,17 @@ class PreviewController(QObject):
         if token:
             self.view.load_button.setVisible(False)
 
-    def set_data(self, data: List[Dict[str, Any]]) -> None:
-        """设置要预览的数据
-
-        Args:
-            data: 要预览的数据列表
-        """
-        self.data = data
+    def set_data(self) -> None:
+        """设置要预览的数据"""
+        self.data = self.data_manager.current_data
         self._load_data_to_table()
         self._update_summary()
 
     def _load_data_to_table(self) -> None:
         """加载数据到表格"""
         if not self.data:
+            self.view.preview_table.setRowCount(0)
+            self.view.preview_table.setColumnCount(0)
             return
 
         data_list = self.data
@@ -456,7 +453,8 @@ class PreviewController(QObject):
         Returns:
             上传结果或None（如果失败）
         """
-        API_URL = "http://47.100.46.227:5586/api/internal/cost_ident/upload_oa"
+        # API_URL = "http://47.100.46.227:5586/api/internal/cost_ident/upload_oa"
+        API_URL = "http://47.100.46.227:5586/api/rear/get_avatar"
 
         try:
             # 检查网络连接
@@ -476,13 +474,13 @@ class PreviewController(QObject):
                 return None
 
             headers = {"Authorization": f"Bearer {token_manager.token}"}
+            response = requests.get(API_URL, headers=headers)
 
-            response = requests.post(
-                API_URL,
-                json=processed_data,
-                headers=headers,
-                timeout=300
-            )
+            # response = requests.post(
+            #     API_URL,
+            #     json=processed_data,
+            #     headers=headers,
+            # )
             try:
                 result = response.json()
             except json.JSONDecodeError as e:
@@ -495,17 +493,6 @@ class PreviewController(QObject):
             logger.info(f"上传接口响应: {result}")
             return result
 
-        except requests.exceptions.Timeout:
-            reply = QMessageBox.critical(
-                self.view,
-                "上传超时",
-                "上传请求超时，可能是网络较慢或服务器繁忙。\n\n是否要重试？",
-                QMessageBox.Retry | QMessageBox.Cancel
-            )
-            logger.info(f"上传请求超时")
-            if reply == QMessageBox.Retry:
-                return self._upload_to_server(processed_data)
-            return None
         except Exception as e:
             error_msg = f"上传请求失败: {str(e)}"
             QMessageBox.critical(self.view, "上传错误", f"{error_msg}\n\n请检查网络连接后重新尝试。")
@@ -520,17 +507,16 @@ class PreviewController(QObject):
             result: 上传结果
             processed_data: 处理后的数据
         """
-        error_list = []
+        error_list = result.get("error_list", [])
 
         if result.get("code") == 200:
-            error_list = result.get("error_list", [])
-            if error_list is None:
-                QMessageBox.information(self.view, "成功", "上传成功")
+            if not error_list:
+                QMessageBox.information(self.view, "成功", result.get("message"))
             else:
                 QMessageBox.warning(
                     self.view,
                     "部分成功",
-                    f"{result.get('message')}。请查看预览数据后重新上传",
+                    f"{result.get('message')}\n\n请查看上传失败的数据重新上传",
                 )
         else:
             QMessageBox.critical(
@@ -551,19 +537,33 @@ class PreviewController(QObject):
 
         Args:
             error_list: 错误列表
-            processed_data: 处理后的数据
+            processed_data: 处理后的数据（包含split_id）
             result: 上传结果
         """
-        save_data = self.data
+        save_data = self.data.copy()
 
         if error_list:
-            # 保留上传失败的数据
-            result_data = self._reserve_error_data(
-                self.data, processed_data, error_list
-            )
-            save_data = self._mark_error(self.data, result)
-            self.set_data(result_data)
-            self.data = result_data
+            # 建立split_id到原始数据索引的映射
+            split_id_to_original_indices = self._build_split_id_mapping(processed_data)
+            # 获取失败的原始数据索引
+            failed_indices = set()
+            for split_id in error_list:
+                if split_id in split_id_to_original_indices:
+                    failed_indices.update(split_id_to_original_indices[split_id])
+            # 保留失败的数据用于重新上传
+            self.data = [
+                item for i, item in enumerate(self.data)
+                if i in failed_indices
+            ]
+            # 标记保存数据的状态
+            for i, item in enumerate(save_data):
+                item["is_error"] = i in failed_indices
+
+            logger.error(f"上传失败的数据:{self.data}")
+            up_local_file(error_log_filename)
+
+            print(f"上传失败的数据索引: {failed_indices}")
+            print(f"保留的失败数据条数: {len(self.data)}, 详情: {self.data}")
         else:
             # 标记所有数据为成功
             for item in save_data:
@@ -575,7 +575,28 @@ class PreviewController(QObject):
 
         # 发出最终上传信号
         self.data_manager.set_current_data(self.data)
+        self.set_data()
         self.final_upload_requested.emit()
+
+    def _build_split_id_mapping(self, processed_data: List[Dict[str, Any]]) -> Dict[int, List[int]]:
+        """建立split_id到原始数据索引的映射
+
+        Args:
+            processed_data: 处理后的数据
+
+        Returns:
+            split_id -> [原始数据索引列表] 的映射
+        """
+        mapping = {}
+
+        for i, processed_row in enumerate(processed_data):
+            split_id = processed_row.get("split_id")
+            if split_id is not None:
+                if split_id not in mapping:
+                    mapping[split_id] = []
+                mapping[split_id].append(i)
+
+        return mapping
 
     def _save_upload_record(self, save_data: List[Dict[str, Any]]) -> None:
         """保存上传记录
@@ -631,78 +652,3 @@ class PreviewController(QObject):
             new_list.append(new_row)
 
         return new_list
-
-    def _reserve_error_data(
-            self,
-            old_data: List[Dict[str, Any]],
-            new_data: List[Dict[str, Any]],
-            error_list: List[Any],
-    ) -> List[Dict[str, Any]]:
-        """保留错误数据
-
-        Args:
-            old_data: 原始数据
-            new_data: 处理后的数据
-            error_list: 错误列表
-
-        Returns:
-            保留的错误数据
-        """
-        result = []
-        for new_row in new_data:
-            if new_row.get("split_id") in error_list:
-                for old_row in old_data:
-                    if self._rows_match(new_row, old_row):
-                        result.append(old_row)
-                        break
-
-        error_file = {item['源文件'] for item in result}
-        logger.error(f'用户:{user_name}, 提交至OA数据库失败')
-        logger.error(f'失败记录数据:{result}')
-        logger.error(f'提交至OA失败文件:{error_file}')
-        # TODO:真实上传
-        up_local_file(error_log_filename)
-        print('日志文件:', error_log_filename)
-        return result
-
-    def _rows_match(self, new_row: Dict[str, Any], old_row: Dict[str, Any]) -> bool:
-        """检查新旧行是否匹配
-
-        Args:
-            new_row: 新行数据
-            old_row: 旧行数据
-
-        Returns:
-            是否匹配
-        """
-        return (
-                new_row.get("wxht") == old_row.get("外销合同")
-                and new_row.get("skdw") == old_row.get("船代公司")
-                and new_row.get("fymc") == old_row.get("费用名称")
-                and new_row.get("bb") == old_row.get("货币代码")
-                and float(new_row.get("je", 0)) == float(old_row.get("金额", 0))
-                and new_row.get("bz") == old_row.get("备注")
-        )
-
-    def _mark_error(
-            self, old_data: List[Dict[str, Any]], result: Dict[str, Any]
-    ) -> List[Dict[str, Any]]:
-        """标记错误数据
-
-        Args:
-            old_data: 原始数据
-            result: 上传结果
-
-        Returns:
-            标记后的数据
-        """
-        result_list = []
-        result_set = [tuple(sorted(item.items())) for item in result.get("data", [])]
-
-        for item in old_data:
-            item_copy = item.copy()
-            item_tuple = tuple(sorted(item.items()))
-            item_copy["is_error"] = item_tuple in result_set
-            result_list.append(item_copy)
-
-        return result_list
