@@ -100,7 +100,7 @@ class PreviewView(QWidget):
         button_layout.addWidget(self.load_button)
 
         # 添加上传按钮
-        self.upload_button = QPushButton("确认上传")
+        self.upload_button = QPushButton("提交至OA系统")
         StyleManager.apply_button_style(self.upload_button, 'success')
         button_layout.addWidget(self.upload_button)
 
