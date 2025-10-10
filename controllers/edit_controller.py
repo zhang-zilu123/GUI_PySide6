@@ -78,6 +78,8 @@ class EditController(QObject):
         """
         data_list = data
         if not data_list:
+            self.view.data_table.setRowCount(0)
+            self.view.data_table.setColumnCount(0)
             return
 
         self.current_data = data_list.copy()  # 保存当前数据的副本
@@ -521,15 +523,6 @@ class EditController(QObject):
                 return False
 
             return True
-        except PermissionError:
-            QMessageBox.critical(self.view, "错误", "没有权限保存到该位置，请检查文件夹权限")
-            return False
-        except OSError as e:
-            QMessageBox.critical(self.view, "错误", f"保存文件时发生系统错误: {str(e)}")
-            return False
-        except json.JSONEncodeError as e:
-            QMessageBox.critical(self.view, "错误", f"数据格式化失败: {str(e)}")
-            return False
         except Exception as e:
             QMessageBox.critical(self.view, "错误", f"保存数据失败: {str(e)}")
             return False

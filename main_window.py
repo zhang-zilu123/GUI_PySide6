@@ -33,7 +33,7 @@ class MainWindow(QMainWindow):
         self.data_manager = DataManager()
 
         # 设置窗口标题和初始大小
-        self.setWindowTitle("费用识别工具V2.0")
+        self.setWindowTitle("费用识别工具V3.0")
         self.setGeometry(100, 100, 700, 500)
         self.resize(1500, 600)
 
@@ -172,7 +172,7 @@ class MainWindow(QMainWindow):
         self.status_bar.showMessage("准备上传数据")
         data = self.data_manager.current_data
         print("最终提交的数据:", data)
-        self.preview_controller.set_data(data)
+        self.preview_controller.set_data()
         self.tab_widget.setCurrentWidget(self.preview_view)
 
     def _on_final_upload_requested(self):
@@ -181,15 +181,13 @@ class MainWindow(QMainWindow):
         data = self.data_manager.current_data
         filename = self.data_manager.file_name
         self.data_manager.set_uploaded_file_name(filename)
+        self.edit_controller.set_data()
+        self.preview_controller.set_data()
         if data:
-            self.edit_controller.set_data(data)
-            self.preview_controller.set_data(data)
-            self.tab_widget.setCurrentWidget(self.preview_view)
+            self.tab_widget.setCurrentWidget(self.edit_view)
         else:
             self.data_manager.set_file_name("")
-            self.edit_controller.set_data([])
             self.edit_controller.update_filename("暂无文件")
-            self.preview_controller.set_data([])
             self.tab_widget.setCurrentWidget(self.upload_view)
         # 刷新历史记录
         self.history_controller.refresh_history()
@@ -197,8 +195,7 @@ class MainWindow(QMainWindow):
     def _on_back_to_edit_requested(self):
         """处理返回编辑请求"""
         self.status_bar.showMessage("返回编辑")
-        data = self.data_manager.current_data
-        self.edit_controller.set_data(data)
+        self.edit_controller.set_data()
         # 返回到编辑界面
         self.tab_widget.setCurrentWidget(self.edit_view)
 
