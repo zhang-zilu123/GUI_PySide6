@@ -97,7 +97,8 @@ class ExtractDataWorker(QThread):
                     for file_path in pdf_files:
                         try:
                             file_path_with_ts = add_timestamp_to_filename(file_path)
-                            object_key = up_local_file(file_path_with_ts)
+                            object_key = 1
+                            # object_key = up_local_file(file_path_with_ts)
                             object_keys.append(object_key)
                             logger.info(f'上传文件到OSS: {file_path} -> {object_key}')
                         except Exception as upload_error:
@@ -105,7 +106,7 @@ class ExtractDataWorker(QThread):
                             logger.error(error_msg)
                             self.finished.emit("", [], False, error_msg)
                             return
-                    up_local_file(log_filename)
+                    # up_local_file(log_filename)
                     print('上传到OSS完成:', log_filename)
                     data = self._extract_data_from_pdf(pdf_files)
                     self.finished.emit(filename_str, data, True, "")
@@ -120,7 +121,8 @@ class ExtractDataWorker(QThread):
                 # TODO: 真实上传
                 for file_path in self.file_paths:
                     try:
-                        object_key = up_local_file(file_path)
+                        object_key = 1
+                        # object_key = up_local_file(file_path)
                         object_keys.append(object_key)
                         logger.info(f'上传文件到OSS: {file_path} -> {object_key}')
                     except Exception as upload_error:
@@ -128,7 +130,7 @@ class ExtractDataWorker(QThread):
                         logger.error(error_msg)
                         self.finished.emit("", [], False, error_msg)
                         return
-                up_local_file(log_filename)
+                # up_local_file(log_filename)
                 print('上传到OSS完成:', log_filename)
                 data = self._extract_data_from_pdf(self.file_paths)
                 self.finished.emit(filename_str, data, True, "")
@@ -167,7 +169,6 @@ class ExtractDataWorker(QThread):
 
             file_paths = fixed_paths
             os.environ['MINERU_MODEL_SOURCE'] = 'local'
-            print(f'开始解析PDF文件: {file_paths}')
         except Exception as e:
             error_msg = f"预处理文件失败: {str(e)}"
             logger.error(error_msg)
@@ -207,7 +208,6 @@ class ExtractDataWorker(QThread):
         Returns:
             处理后的信息字典
         """
-        print("正在大模型提取结构，请稍候...")
         OUTPUT_DIR = Path(__file__).resolve().parents[1] / "output"
         from dotenv import load_dotenv
         load_dotenv()
@@ -261,6 +261,12 @@ class ExtractDataWorker(QThread):
             source_file = file_name_to_path.get(file_name, "未知文件")
 
             for record in records:
+                amount = record.get('金额', '')
+                if amount:
+                    amount_str = str(amount).strip().replace('¥', '').replace('$', '').replace(',', '')
+                    amount_value = float(amount_str)
+                    if abs(amount_value) < 0.001:
+                        continue
                 record['源文件'] = source_file
                 display_data.append(record)
 
