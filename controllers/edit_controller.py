@@ -277,13 +277,71 @@ class EditController(QObject):
             batch_clear_action.triggered.connect(self._batch_clear_cells)
             menu.addSeparator()
 
-        # 原有的行操作
-        delete_action = menu.addAction("删除此行")
+            # 获取选中单元格涉及的所有行
+            selected_rows = set(item.row() for item in selected_items)
+            if len(selected_rows) > 1:
+                # 如果涉及多行，显示删除多行选项
+                delete_rows_action = menu.addAction(f"删除所选单元格对应的行 ({len(selected_rows)}行)")
+                delete_rows_action.triggered.connect(lambda: self._delete_selected_rows(selected_rows))
+            else:
+                # 如果只涉及一行，显示删除单行选项
+                delete_action = menu.addAction("删除此行")
+                delete_action.triggered.connect(lambda: self.delete_row(row))
+        else:
+            batch_clear_action = menu.addAction("清空所选单元格")
+            batch_clear_action.triggered.connect(self._batch_clear_cells)
+            delete_action = menu.addAction("删除此行")
+            delete_action.triggered.connect(lambda: self.delete_row(row))
+
         add_action = menu.addAction("在下方增加一行")
-        delete_action.triggered.connect(lambda: self.delete_row(row))
         add_action.triggered.connect(lambda: self.add_row(row))
 
+
         menu.exec(self.view.data_table.mapToGlobal(pos))
+
+    def _delete_selected_rows(self, selected_rows: set) -> None:
+        """删除选中的多行
+
+        Args:
+            selected_rows: 要删除的行号集合
+        """
+        try:
+            # 确认删除操作
+            reply = QMessageBox.question(
+                self.view,
+                '确认删除',
+                f'确定要删除所选的 {len(selected_rows)} 行数据吗？\n\n此操作不可撤销。',
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+
+            if reply != QMessageBox.Yes:
+                return
+
+            # 将行号转换为列表并按降序排列，这样从后往前删除不会影响前面的行号
+            rows_to_delete = sorted(list(selected_rows), reverse=True)
+
+            # 从后往前删除行，避免行号变化的问题
+            for row in rows_to_delete:
+                if 0 <= row < self.view.data_table.rowCount():
+                    self.view.data_table.removeRow(row)
+
+            # 更新数据
+            self._collect_current_data()
+
+            # 显示删除成功消息
+            QMessageBox.information(
+                self.view,
+                '删除完成',
+                f'已成功删除 {len(rows_to_delete)} 行数据'
+            )
+
+        except Exception as e:
+            QMessageBox.critical(
+                self.view,
+                '删除失败',
+                f'删除行时发生错误: {str(e)}'
+            )
 
     def _batch_edit_cells(self) -> None:
         """批量编辑选中的单元格"""
