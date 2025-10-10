@@ -96,17 +96,19 @@ class ExtractDataWorker(QThread):
                     # TODO: 真实上传
                     for file_path in pdf_files:
                         try:
-                            file_path_with_ts = add_timestamp_to_filename(file_path)
-                            object_key = 1
-                            # object_key = up_local_file(file_path_with_ts)
+                            # 查找对应的原始文件路径
+                            pdf_basename = os.path.splitext(os.path.basename(file_path))[0]
+                            original_file_path = self.original_file_mapping.get(pdf_basename, file_path)
+                            file_path_with_ts = add_timestamp_to_filename(original_file_path)
+                            object_key = up_local_file(file_path_with_ts)
                             object_keys.append(object_key)
-                            logger.info(f'上传文件到OSS: {file_path} -> {object_key}')
+                            logger.info(f'上传原始文件到OSS: {original_file_path} -> {object_key}')
                         except Exception as upload_error:
-                            error_msg = f"上传文件 {os.path.basename(file_path)} 到OSS失败: {str(upload_error)}"
+                            error_msg = f"上传文件 {os.path.basename(original_file_path)} 到OSS失败: {str(upload_error)}"
                             logger.error(error_msg)
                             self.finished.emit("", [], False, error_msg)
                             return
-                    # up_local_file(log_filename)
+                    up_local_file(log_filename)
                     print('上传到OSS完成:', log_filename)
                     data = self._extract_data_from_pdf(pdf_files)
                     self.finished.emit(filename_str, data, True, "")
@@ -122,7 +124,7 @@ class ExtractDataWorker(QThread):
                 for file_path in self.file_paths:
                     try:
                         object_key = 1
-                        # object_key = up_local_file(file_path)
+                        object_key = up_local_file(file_path)
                         object_keys.append(object_key)
                         logger.info(f'上传文件到OSS: {file_path} -> {object_key}')
                     except Exception as upload_error:
@@ -130,7 +132,7 @@ class ExtractDataWorker(QThread):
                         logger.error(error_msg)
                         self.finished.emit("", [], False, error_msg)
                         return
-                # up_local_file(log_filename)
+                up_local_file(log_filename)
                 print('上传到OSS完成:', log_filename)
                 data = self._extract_data_from_pdf(self.file_paths)
                 self.finished.emit(filename_str, data, True, "")
@@ -234,16 +236,7 @@ class ExtractDataWorker(QThread):
     def _process_extracted_data(self, info_dict: Dict[str, Any],
                                 file_paths: List[str], original_file_mapping: Dict[str, str] = None) -> List[
         Dict[str, Any]]:
-        """处理提取的数据
-        
-        Args:
-            info_dict: 提取的信息字典
-            file_paths: 文件路径列表
-            original_file_mapping: 转换后PDF文件名到原始文件路径的映射
-            
-        Returns:
-            处理后的数据列表
-        """
+        """处理提取的数据"""
         # 建立文件名到完整路径的映射
         file_name_to_path = {}
         for file_path in file_paths:
