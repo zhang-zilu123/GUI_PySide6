@@ -2,7 +2,7 @@
 预览功能控制器
 处理数据预览相关的业务逻辑
 """
-
+import hashlib
 import json
 import os
 import shutil
@@ -21,6 +21,11 @@ from config.config import SUBMIT_FIELD
 from data.history_manager import HistoryManager
 from data.token_manager import token_manager
 from utils.upload_file_to_oss import up_local_file
+from dotenv import load_dotenv
+
+load_dotenv()
+
+URL = os.getenv("URL")
 
 os.makedirs("./log", exist_ok=True)
 current_time = datetime.now().strftime("%Y%m%d-%H%M")
@@ -75,7 +80,7 @@ class LoginDialog(QDialog):
 
     def get_login_url(self) -> None:
         """请求后端获取扫码登录页面URL"""
-        api_url = "http://47.100.46.227:5586/api/login/qw_login_url?next=/chat"
+        api_url = URL + "/login/qw_login_url?next=/chat"
         request = QNetworkRequest(QUrl(api_url))
         request.setHeader(QNetworkRequest.ContentTypeHeader, "application/json")
         request.setRawHeader(b"User-Agent", b"PySide6 Network Client")
@@ -152,7 +157,7 @@ class LoginDialog(QDialog):
             code: 授权码
             state: 状态参数
         """
-        api_url = "http://47.100.46.227:5586/api/login/qw_login"
+        api_url = URL + "/login/qw_login"
         request = QNetworkRequest(QUrl(api_url))
         request.setHeader(QNetworkRequest.ContentTypeHeader, "application/json")
 
@@ -189,7 +194,7 @@ class LoginDialog(QDialog):
                 token_manager.set_token(token)
                 self.login_success.emit()
                 QMessageBox.information(self, "成功", "登录成功, 可上传数据")
-                api_url = "http://47.100.46.227:5586/api/admin/check/get_permission"
+                api_url = URL + "/admin/check/get_permission"
                 headers = {"Authorization": f"Bearer {token}"}
                 response = requests.get(api_url, headers=headers)
                 user_name = response.json()["user_name"]
@@ -453,14 +458,14 @@ class PreviewController(QObject):
         Returns:
             上传结果或None（如果失败）
         """
-        # API_URL = "http://47.100.46.227:5586/api/internal/cost_ident/upload_oa"
-        API_URL = "http://47.100.46.227:5586/api/rear/get_avatar"
+        # API_URL = URL + "/internal/cost_ident/upload_oa"
+        API_URL = URL + "/rear/get_avatar"
 
         try:
             # 检查网络连接
             try:
                 import urllib.request
-                urllib.request.urlopen("http://47.100.46.227:5586", timeout=30)
+                urllib.request.urlopen(URL, timeout=30)
             except Exception:
                 reply = QMessageBox.critical(
                     self.view,
@@ -525,20 +530,18 @@ class PreviewController(QObject):
             return
 
         # 处理结果数据
-        self._process_upload_result(error_list, processed_data, result)
+        self._process_upload_result(error_list, processed_data)
 
     def _process_upload_result(
             self,
             error_list: List[Any],
             processed_data: List[Dict[str, Any]],
-            result: Dict[str, Any],
     ) -> None:
         """处理上传结果数据
 
         Args:
             error_list: 错误列表
             processed_data: 处理后的数据（包含split_id）
-            result: 上传结果
         """
         save_data = self.data.copy()
 
@@ -559,6 +562,7 @@ class PreviewController(QObject):
             for i, item in enumerate(save_data):
                 item["is_error"] = i in failed_indices
 
+            # TODO:真实上传
             logger.error(f"上传失败的数据:{self.data}")
             up_local_file(error_log_filename)
 
@@ -622,33 +626,59 @@ class PreviewController(QObject):
             print(error_msg)
 
     def _process_data(self, data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """处理数据格式以符合API要求
-
-        Args:
-            data: 原始数据
-
-        Returns:
-            处理后的数据
-        """
+        """处理数据格式以符合API要求，并生成唯一split_id（同组同id）"""
         new_list = []
-        group_map = {}
-        current_id = 1
+        file_hash_cache = {}
+        group_index = {}  # {(file_hash, wxht, bb): idx}
+        group_id_map = {}  # {(file_hash, wxht, bb): split_id}
 
+        # 1. 先为每个分组分配编号
+        idx = 1
         for row in data:
-            key = (row.get("外销合同", ""), row.get("货币代码", ""))
-            if key not in group_map:
-                group_map[key] = current_id
-                current_id += 1
+            file_path = row.get("源文件", "")
+            wxht = row.get("外销合同", "")
+            bb = row.get("货币代码", "")
+            # 计算文件内容hash
+            if file_path not in file_hash_cache:
+                try:
+                    with open(file_path, "rb") as f:
+                        file_bytes = f.read()
+                    file_hash = hashlib.sha256(file_bytes).hexdigest()[:30]
+                except Exception as e:
+                    file_hash = "nofile00"
+            else:
+                file_hash = file_hash_cache[file_path]
+            file_hash_cache[file_path] = file_hash
+
+            group_key = (file_hash, wxht, bb)
+            if group_key not in group_index:
+                group_index[group_key] = idx
+                idx += 1
+
+        # 2. 生成每组的split_id
+        for group_key, group_no in group_index.items():
+            file_hash = group_key[0]
+            group_id_map[group_key] = f"{file_hash}-{group_no}"
+
+        # 3. 遍历数据，分配split_id
+        for row in data:
+            file_path = row.get("源文件", "")
+            wxht = row.get("外销合同", "")
+            bb = row.get("货币代码", "")
+            file_hash = file_hash_cache[file_path]
+            group_key = (file_hash, wxht, bb)
+            split_id = group_id_map[group_key]
 
             new_row = {
-                "split_id": group_map[key],
-                "wxht": row.get("外销合同", ""),
+                "split_id": split_id,
+                "wxht": wxht,
                 "skdw": row.get("船代公司", ""),
                 "fymc": row.get("费用名称", ""),
-                "bb": row.get("货币代码", ""),
+                "bb": bb,
                 "je": float(row.get("金额", 0)),
                 "bz": row.get("备注", ""),
             }
             new_list.append(new_row)
 
+        print(f"处理后的数据: {new_list}")
         return new_list
