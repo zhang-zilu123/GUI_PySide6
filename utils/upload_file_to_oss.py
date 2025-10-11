@@ -4,6 +4,7 @@
 """
 import os
 import logging
+import datetime
 from typing import Optional
 
 # 设置日志
@@ -100,7 +101,15 @@ def up_local_file(local_file_path: str, bucket_name: str = 'muai-models',
         if not file_name:
             raise ValueError("无法从文件路径提取文件名")
             
-        object_key = f"{object_prefix}/{file_name}" if object_prefix else file_name
+        if file_name.lower().endswith('.log'):
+            upload_file_name = file_name
+        else:
+            timestamp = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
+            name, ext = os.path.splitext(file_name)
+            upload_file_name = f"{timestamp}_{name}{ext}"
+
+        object_key = f"{object_prefix}/{upload_file_name}" if object_prefix else upload_file_name
+
         
         # 执行上传
         try:

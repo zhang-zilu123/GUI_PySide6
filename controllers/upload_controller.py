@@ -9,18 +9,13 @@ import time
 import logging
 
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Tuple
 
 from PySide6.QtWidgets import QFileDialog, QMessageBox, QHBoxLayout, QPushButton
 from PySide6.QtCore import QObject, Signal, QThread, Qt
 
 from datetime import datetime
-from data.temp_data import get_data
-from utils.common import get_filename_list, add_timestamp_to_filename
 from utils.mineru_parse import parse_doc
-from utils.model_md_to_json import extract_info_from_md
-from config.config import EXTRA_FIELD
-from utils.model_translate import translate_json
 from utils.upload_file_to_oss import up_local_file
 from utils.table_corrector_multi import TableCorrector
 from utils.file_to_pdf import excel_to_pdf, docx_to_pdf, rtf_to_pdf
@@ -96,11 +91,9 @@ class ExtractDataWorker(QThread):
                     # TODO: 真实上传
                     for file_path in pdf_files:
                         try:
-                            # 查找对应的原始文件路径
                             pdf_basename = os.path.splitext(os.path.basename(file_path))[0]
                             original_file_path = self.original_file_mapping.get(pdf_basename, file_path)
-                            file_path_with_ts = add_timestamp_to_filename(original_file_path)
-                            object_key = up_local_file(file_path_with_ts)
+                            object_key = up_local_file(original_file_path)
                             object_keys.append(object_key)
                             logger.info(f'上传原始文件到OSS: {original_file_path} -> {object_key}')
                         except Exception as upload_error:
@@ -123,7 +116,6 @@ class ExtractDataWorker(QThread):
                 # TODO: 真实上传
                 for file_path in self.file_paths:
                     try:
-                        object_key = 1
                         object_key = up_local_file(file_path)
                         object_keys.append(object_key)
                         logger.info(f'上传文件到OSS: {file_path} -> {object_key}')
