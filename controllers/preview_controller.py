@@ -458,34 +458,18 @@ class PreviewController(QObject):
         Returns:
             上传结果或None（如果失败）
         """
-        # API_URL = URL + "/internal/cost_ident/upload_oa"
-        API_URL = URL + "/rear/get_avatar"
+        API_URL = URL + "/internal/cost_ident/upload_oa"
+        # API_URL = URL + "/rear/get_avatar"
 
         try:
-            # 检查网络连接
-            try:
-                import urllib.request
-                urllib.request.urlopen(URL, timeout=30)
-            except Exception:
-                reply = QMessageBox.critical(
-                    self.view,
-                    "网络连接失败",
-                    "无法连接到服务器，请检查网络连接。\n\n是否要重试？",
-                    QMessageBox.Retry | QMessageBox.Cancel
-                )
-                logger.info("网络连接失败，无法连接到服务器")
-                if reply == QMessageBox.Retry:
-                    return self._upload_to_server(processed_data)
-                return None
-
             headers = {"Authorization": f"Bearer {token_manager.token}"}
-            response = requests.get(API_URL, headers=headers)
+            # response = requests.get(API_URL, headers=headers)
 
-            # response = requests.post(
-            #     API_URL,
-            #     json=processed_data,
-            #     headers=headers,
-            # )
+            response = requests.post(
+                API_URL,
+                json=processed_data,
+                headers=headers,
+            )
             try:
                 result = response.json()
             except json.JSONDecodeError as e:
