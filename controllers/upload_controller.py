@@ -194,10 +194,8 @@ class UploadController(QObject):
         Returns:
             已上传的文件名列表
         """
-        if (
-                not hasattr(self.data_manager, "uploaded_file_name")
-                or not self.data_manager.uploaded_file_name
-        ):
+        if (not hasattr(self.data_manager, "uploaded_file_name")
+                or not self.data_manager.uploaded_file_name):
             return []
         if isinstance(self.data_manager.uploaded_file_name, str):
             return [
@@ -532,20 +530,6 @@ class UploadController(QObject):
             # 转换失败
             print(f"文档转换失败: {error_msg}")
             self._handle_extraction_error(error_msg)
-
-    def _start_analysis(self):
-        """开始分析处理"""
-        # 立即设置处理状态和UI
-        self._set_processing_state(True)
-        self.processing_started.emit()
-        self.view.title.setText("正在提取识别中，请稍候...")
-        self.view.title.setStyleSheet("color: red; font-weight: bold; font-size: 20px;")
-
-        # 检查是否需要文档转换
-        if self._has_document_files(self.uploaded_files):
-            self._start_document_conversion_analysis()
-        else:
-            self._start_direct_analysis()
 
     def _on_worker_finished(self, filename_str, data, success, error_msg):
         """处理工作线程完成事件"""
