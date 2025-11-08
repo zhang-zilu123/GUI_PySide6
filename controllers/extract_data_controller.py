@@ -2,7 +2,6 @@ import json
 import os
 import shutil
 import time
-from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Any
 from PySide6.QtCore import QThread, Signal
@@ -14,7 +13,6 @@ from utils.upload_file_to_oss import up_local_file
 
 logger = get_file_conversion_logger()
 error_logger = get_error_logger()
-
 
 class ExtractDataWorker(QThread):
     """数据提取工作线程
@@ -51,11 +49,6 @@ class ExtractDataWorker(QThread):
 
         self.process_directory = process_directory
         self.original_file_mapping = original_file_mapping or {}
-
-    def _get_log_filename(self) -> str:
-        """获取日志文件路径"""
-        current_time = datetime.now().strftime("%Y%m%d-%H%M")
-        return f"./log/{current_time}-上传文件.log"
 
     def run(self) -> None:
         """在线程中执行耗时操作"""
@@ -100,9 +93,6 @@ class ExtractDataWorker(QThread):
                             logger.error(error_msg)
                             self.finished.emit("", [], False, error_msg)
                             return
-                    log_file_path = self._get_log_filename()
-                    # up_local_file(log_file_path)
-                    print("上传到OSS完成:", log_file_path)
                     data = self._extract_data_from_pdf(pdf_files)
                     self.finished.emit(filename_str, data, True, "")
                 else:
@@ -127,9 +117,6 @@ class ExtractDataWorker(QThread):
                         logger.error(error_msg)
                         self.finished.emit("", [], False, error_msg)
                         return
-                log_file_path = self._get_log_filename()
-                # up_local_file(log_file_path)
-                print("上传到OSS完成:", log_file_path)
                 data = self._extract_data_from_pdf(self.file_paths)
                 self.finished.emit(filename_str, data, True, "")
         except Exception as e:
@@ -176,7 +163,7 @@ class ExtractDataWorker(QThread):
             # 解析PDF
             self.status_updated.emit("正在识别PDF，请稍候...")
             start_time = time.time()
-            parse_doc(path_list=file_paths, output_dir="./output", backend="pipeline")
+            parse_doc(path_list=file_paths, output_dir="../output", backend="pipeline")
             end_time = time.time()
             print(f"PDF解析完成，耗时 {end_time - start_time:.2f} 秒")
 
