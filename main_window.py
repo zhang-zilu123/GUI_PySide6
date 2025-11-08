@@ -1,11 +1,17 @@
 """
 主窗口类，使用QStackedWidget管理多个界面之间的切换
 """
+
 import json
 import os.path
 
-from PySide6.QtWidgets import (QMainWindow, QStatusBar, QMessageBox, QTabWidget,
-                               QSizePolicy)
+from PySide6.QtWidgets import (
+    QMainWindow,
+    QStatusBar,
+    QMessageBox,
+    QTabWidget,
+    QSizePolicy,
+)
 from PySide6.QtCore import Qt
 
 from controllers.history_controller import HistoryController
@@ -33,7 +39,7 @@ class MainWindow(QMainWindow):
         self.data_manager = DataManager()
 
         # 设置窗口标题和初始大小
-        self.setWindowTitle("费用识别工具V3.0")
+        self.setWindowTitle("费用识别工具V4.0")
         self.setGeometry(100, 100, 700, 500)
         self.resize(1500, 600)
 
@@ -72,8 +78,12 @@ class MainWindow(QMainWindow):
         # 创建对应的控制器
         self.upload_controller = UploadController(self.upload_view, self.data_manager)
         self.edit_controller = EditController(self.edit_view, self.data_manager)
-        self.preview_controller = PreviewController(self.preview_view, self.data_manager)
-        self.history_controller = HistoryController(self.history_view, self.data_manager)
+        self.preview_controller = PreviewController(
+            self.preview_view, self.data_manager
+        )
+        self.history_controller = HistoryController(
+            self.history_view, self.data_manager
+        )
 
         # 将界面添加到标签页中
         self.tab_widget.addTab(self.upload_view, "上传文件")
@@ -91,13 +101,20 @@ class MainWindow(QMainWindow):
         """检查临时数据文件"""
         temp_json_path = os.path.join("temp", "temp_data.json")
         if os.path.exists(temp_json_path):
-            with open(temp_json_path, 'r', encoding='utf-8') as f:
+            with open(temp_json_path, "r", encoding="utf-8") as f:
                 try:
                     data = json.load(f)
                     if data:
-                        source_files = [item.get("源文件", "") for item in data if item.get("源文件")]
+                        source_files = [
+                            item.get("源文件", "")
+                            for item in data
+                            if item.get("源文件")
+                        ]
                         unique_source_files = list(set(source_files))
-                        filename = [os.path.basename(filepath) for filepath in unique_source_files]
+                        filename = [
+                            os.path.basename(filepath)
+                            for filepath in unique_source_files
+                        ]
                         filename_str = ", ".join(filename)
                         self.data_manager.set_file_name(filename_str)
                         self.edit_controller.update_filename(filename_str)
@@ -110,7 +127,9 @@ class MainWindow(QMainWindow):
                 except json.JSONDecodeError:
                     print("无法解析临时数据文件，可能已损坏。")
                     self.tab_widget.setCurrentWidget(self.upload_view)
-                    QMessageBox.information('提示', '无法解析临时数据文件，可能已损坏。')
+                    QMessageBox.information(
+                        "提示", "无法解析临时数据文件，可能已损坏。"
+                    )
 
     def _connect_signals(self):
         """连接各个界面发出的信号"""
@@ -120,13 +139,21 @@ class MainWindow(QMainWindow):
         self.upload_controller.processing_finished.connect(self._on_processing_finished)
 
         # 编辑界面信号
-        self.edit_controller.data_saved.connect(lambda: self.status_bar.showMessage("数据已保存"))
+        self.edit_controller.data_saved.connect(
+            lambda: self.status_bar.showMessage("数据已保存")
+        )
         self.edit_controller.submit_final.connect(self._on_submit_final)
 
         # 预览界面信号
-        self.preview_controller.final_upload_requested.connect(self._on_final_upload_requested)
-        self.preview_controller.back_to_edit_requested.connect(self._on_back_to_edit_requested)
-        self.preview_controller.continue_upload_requested.connect(self._on_continue_upload_requested)
+        self.preview_controller.final_upload_requested.connect(
+            self._on_final_upload_requested
+        )
+        self.preview_controller.back_to_edit_requested.connect(
+            self._on_back_to_edit_requested
+        )
+        self.preview_controller.continue_upload_requested.connect(
+            self._on_continue_upload_requested
+        )
 
         # 标签页切换信号
         self.tab_widget.currentChanged.connect(self._on_tab_changed)
@@ -156,7 +183,7 @@ class MainWindow(QMainWindow):
         """提取数据完成，传递数据给编辑界面"""
         self.status_bar.showMessage("文件处理完成")
         data = self.data_manager.current_data
-        print('处理完成的文件:', data)
+        print("处理完成的文件:", data)
         filename = self.data_manager.file_name
         self.edit_controller.update_filename(filename)
         # 直接保存原始数据，不修改结构
@@ -211,7 +238,7 @@ class MainWindow(QMainWindow):
             "退出确认",
             "确定要退出吗？",
             QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
+            QMessageBox.No,
         )
         if reply == QMessageBox.Yes:
             event.accept()
