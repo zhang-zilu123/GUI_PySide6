@@ -2,412 +2,25 @@
 上传功能控制器
 处理文件上传相关的业务逻辑
 """
+
 import os
 import shutil
-import json
-import time
-import logging
 
-from pathlib import Path
-from typing import List, Dict, Any, Tuple
-
+from typing import List, Dict
 from PySide6.QtWidgets import QFileDialog, QMessageBox, QHBoxLayout, QPushButton
 from PySide6.QtCore import QObject, Signal, QThread, Qt
 
-from datetime import datetime
-from utils.mineru_parse import parse_doc
-from utils.upload_file_to_oss import up_local_file
-from utils.table_corrector_multi import TableCorrector
-from utils.file_to_pdf import excel_to_pdf, docx_to_pdf, rtf_to_pdf
+from controllers.extract_data_controller import ExtractDataWorker
+from utils.logger import get_upload_logger, get_error_logger
+from controllers.file_conversion_controller import DocumentConversionWorker
 
-os.makedirs('./log', exist_ok=True)
-current_time = datetime.now().strftime('%Y%m%d-%H%M')
-log_filename = f'./log/{current_time}-上传文件.log'
-logger = logging.getLogger("upload")
-handler = logging.FileHandler(log_filename, encoding='utf-8')
-formatter = logging.Formatter('%(asctime)s - %(message)s')
-handler.setFormatter(formatter)
-logger.addHandler(handler)
-logger.setLevel(logging.INFO)
-
-with open('./device_id.txt', 'r', encoding='utf-8') as f:
-    content = f.read()
-    logger.info(f'device_id:{content}')
-
-
-class ExtractDataWorker(QThread):
-    """数据提取工作线程
-    
-    在后台线程中执行PDF文件解析和数据提取，避免阻塞主线程
-    """
-
-    # 信号：参数为文件名字符串, 提取的数据, 是否成功, 错误信息
-    finished = Signal(str, list, bool, str)
-    # 状态更新信号：用于更新UI提示文本
-    status_updated = Signal(str)
-
-    def __init__(self, file_paths: List[str], process_directory: bool = False,
-                 original_file_mapping: Dict[str, str] = None):
-        """初始化工作线程
-        
-        Args:
-            file_paths: 要处理的文件路径列表
-            process_directory: 是否处理整个目录中的PDF文件
-            original_file_mapping: 转换后PDF文件名到原始文件路径的映射
-        """
-        super().__init__()
-        # 确保 file_paths 是列表
-        if isinstance(file_paths, str):
-            self.file_paths = [file_paths]
-        elif isinstance(file_paths, list):
-            self.file_paths = file_paths
-        else:
-            self.file_paths = list(file_paths)
-
-        self.process_directory = process_directory
-        self.original_file_mapping = original_file_mapping or {}
-
-    def run(self) -> None:
-        """在线程中执行耗时操作"""
-        try:
-            if self.process_directory:
-                # 处理目录中的所有PDF文件
-                pdf_files = []
-                for file_path in self.file_paths:
-                    if os.path.isdir(file_path):
-                        # 如果是目录，找到其中所有PDF文件
-                        for root, dirs, files in os.walk(file_path):
-                            for file in files:
-                                if file.lower().endswith('.pdf'):
-                                    pdf_files.append(os.path.join(root, file))
-                    elif file_path.lower().endswith('.pdf'):
-                        pdf_files.append(file_path)
-
-                if pdf_files:
-                    filename_list = [os.path.basename(file_path) for file_path in pdf_files]
-                    filename_str = ", ".join(filename_list)
-                    print(f"开始解析PDF文件: {pdf_files}")
-                    object_keys = []
-                    # TODO: 真实上传
-                    for file_path in pdf_files:
-                        try:
-                            pdf_basename = os.path.splitext(os.path.basename(file_path))[0]
-                            original_file_path = self.original_file_mapping.get(pdf_basename, file_path)
-                            object_key = up_local_file(original_file_path)
-                            object_keys.append(object_key)
-                            logger.info(f'上传原始文件到OSS: {original_file_path} -> {object_key}')
-                        except Exception as upload_error:
-                            error_msg = f"上传文件 {os.path.basename(original_file_path)} 到OSS失败: {str(upload_error)}"
-                            logger.error(error_msg)
-                            self.finished.emit("", [], False, error_msg)
-                            return
-                    up_local_file(log_filename)
-                    print('上传到OSS完成:', log_filename)
-                    data = self._extract_data_from_pdf(pdf_files)
-                    self.finished.emit(filename_str, data, True, "")
-                else:
-                    self.finished.emit("", [], False, "未找到PDF文件进行处理")
-            else:
-                # 原有逻辑：直接处理文件列表
-                filename_list = [os.path.basename(file_path) for file_path in self.file_paths]
-                filename_str = ", ".join(filename_list)
-                print(f"开始解析PDF文件: {self.file_paths}")
-                object_keys = []
-                # TODO: 真实上传
-                for file_path in self.file_paths:
-                    try:
-                        object_key = up_local_file(file_path)
-                        object_keys.append(object_key)
-                        logger.info(f'上传文件到OSS: {file_path} -> {object_key}')
-                    except Exception as upload_error:
-                        error_msg = f"上传文件 {os.path.basename(file_path)} 到OSS失败: {str(upload_error)}"
-                        logger.error(error_msg)
-                        self.finished.emit("", [], False, error_msg)
-                        return
-                up_local_file(log_filename)
-                print('上传到OSS完成:', log_filename)
-                data = self._extract_data_from_pdf(self.file_paths)
-                self.finished.emit(filename_str, data, True, "")
-        except Exception as e:
-            error_msg = f"处理文件时出错: {str(e)}"
-            print(f"Error: {error_msg}")
-            logger.error(error_msg)
-            self.finished.emit("", [], False, error_msg)
-
-    def _extract_data_from_pdf(self, file_paths: List[str]) -> List[Dict[str, Any]]:
-        """从PDF文件中提取数据
-        
-        Args:
-            file_paths: PDF文件路径列表
-            
-        Returns:
-            提取的数据列表
-        """
-        try:
-            fixed_paths = []
-            for path in file_paths:
-                if not os.path.exists(path):
-                    raise FileNotFoundError(f"文件不存在: {path}")
-
-                root, ext = os.path.splitext(path)
-                if ext.isupper():
-                    new_path = root + ext.lower()
-                    if not os.path.exists(new_path):
-                        try:
-                            os.rename(path, new_path)
-                        except OSError as e:
-                            raise OSError(f"重命名文件失败 {path}: {str(e)}")
-                    fixed_paths.append(new_path)
-                else:
-                    fixed_paths.append(path)
-
-            file_paths = fixed_paths
-            os.environ['MINERU_MODEL_SOURCE'] = 'local'
-        except Exception as e:
-            error_msg = f"预处理文件失败: {str(e)}"
-            logger.error(error_msg)
-            raise Exception(error_msg)
-
-        try:
-            # 解析PDF
-            self.status_updated.emit("正在识别PDF，请稍候...")
-            start_time = time.time()
-            parse_doc(path_list=file_paths, output_dir="./output", backend="pipeline")
-            end_time = time.time()
-            print(f"PDF解析完成，耗时 {end_time - start_time:.2f} 秒")
-
-            # 处理解析结果
-            self.status_updated.emit("正在大模型提取结构，请稍候...")
-            info_dict = self._process_parsed_results()
-            print('完成PDF文件解析', info_dict)
-
-            # 清理临时文件
-            self._cleanup_temp_files()
-
-            # 构建返回数据
-            return self._process_extracted_data(info_dict, file_paths, self.original_file_mapping)
-        except Exception as e:
-            error_msg = f"PDF解析失败: {str(e)}"
-            logger.error(error_msg)
-            # 确保清理临时文件
-            try:
-                self._cleanup_temp_files()
-            except Exception as cleanup_error:
-                logger.error(f"清理临时文件失败: {str(cleanup_error)}")
-            raise Exception(error_msg)
-
-    def _process_parsed_results(self) -> Dict[str, Any]:
-        """处理解析结果
-        
-        Returns:
-            处理后的信息字典
-        """
-        OUTPUT_DIR = Path(__file__).resolve().parents[1] / "output"
-        from dotenv import load_dotenv
-        load_dotenv()
-        API_KEY = os.getenv("DASHSCOPE_API_KEY1")
-        corrector = TableCorrector(API_KEY)
-        result = corrector.process_directory(OUTPUT_DIR)
-        info_dict = result.get("info_dict", {})
-
-        # 如果info_dict是字符串，尝试解析为JSON
-        if isinstance(info_dict, str):
-            try:
-                info_dict = json.loads(info_dict)
-            except json.JSONDecodeError:
-                info_dict = {}
-
-        return info_dict
-
-    def _cleanup_temp_files(self) -> None:
-        """清理临时文件"""
-        if os.path.exists('./output'):
-            shutil.rmtree('./output')
-            print('删除临时文件夹 ./output')
-
-    def _process_extracted_data(self, info_dict: Dict[str, Any],
-                                file_paths: List[str], original_file_mapping: Dict[str, str] = None) -> List[
-        Dict[str, Any]]:
-        """处理提取的数据"""
-        # 建立文件名到完整路径的映射
-        file_name_to_path = {}
-        for file_path in file_paths:
-            file_name = os.path.splitext(os.path.basename(file_path))[0]  # 去掉扩展名
-
-            # 如果有原始文件映射，优先使用原始文件路径
-            if original_file_mapping and file_name in original_file_mapping:
-                file_name_to_path[file_name] = original_file_mapping[file_name]
-            else:
-                file_name_to_path[file_name] = file_path
-
-        display_data = []
-        for file_name, records in info_dict.items():
-            # 使用映射查找对应的文件路径
-            source_file = file_name_to_path.get(file_name, "未知文件")
-
-            for record in records:
-                amount = record.get('金额', '')
-                if amount:
-                    amount_str = str(amount).strip().replace('¥', '').replace('$', '').replace(',', '')
-                    amount_value = float(amount_str)
-                    if abs(amount_value) < 0.001:
-                        continue
-                record['源文件'] = source_file
-                display_data.append(record)
-
-        return display_data
-
-
-class DocumentConversionWorker(QThread):
-    """文档转换工作线程"""
-
-    # 信号：转换完成
-    conversion_finished = Signal(list, dict, bool, str)  # converted_files, file_mapping, success, error_msg
-    # 状态更新信号
-    status_updated = Signal(str)
-
-    def __init__(self, file_paths: List[str], output_dir: str):
-        super().__init__()
-        self.file_paths = file_paths
-        self.output_dir = output_dir
-
-    def run(self):
-        """执行文档转换"""
-        try:
-            self.status_updated.emit("正在转换文件格式，请稍候...")
-
-            # 创建输出目录
-            if os.path.exists(self.output_dir):
-                shutil.rmtree(self.output_dir)
-            os.makedirs(self.output_dir)
-
-            # 执行转换 - 修复：不传递参数，直接调用
-            converted_files, file_mapping = self._convert_documents_and_copy_files()
-
-            if not converted_files:
-                error_msg = "没有成功转换任何文件，请检查文件是否损坏或格式是否正确"
-                self.conversion_finished.emit([], {}, False, error_msg)
-                return
-
-            self.conversion_finished.emit(converted_files, file_mapping, True, "")
-
-        except Exception as e:
-            error_msg = f"文档转换失败: {str(e)}"
-            self.conversion_finished.emit([], {}, False, error_msg)
-
-    def _convert_documents_and_copy_files(self) -> Tuple[List[str], Dict[str, str]]:
-        """转换文档文件并复制其他文件到输出目录
-        
-        Returns:
-            (转换后的文件路径列表, 文件名映射字典)
-        """
-        converted_files = []
-        file_mapping = {}  # 转换后PDF文件名(无扩展名) -> 原始文件路径
-
-        for file_path in self.file_paths:
-            filename = os.path.basename(file_path)
-            name, ext = os.path.splitext(filename)
-            ext_lower = ext.lower()
-
-            # 发送当前文件转换状态
-            self.status_updated.emit(f"正在转换文件: {filename}")
-
-            if ext_lower in ['.docx']:
-                # 转换Word文档
-                try:
-                    if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
-                        raise ValueError(f"Word文档文件不存在或为空: {filename}")
-
-                    output_pdf_path = os.path.join(self.output_dir, f"{name}.pdf")
-                    docx_to_pdf(file_path, output_pdf_path)
-
-                    # 检查转换结果
-                    if not os.path.exists(output_pdf_path) or os.path.getsize(output_pdf_path) == 0:
-                        raise ValueError(f"Word文档转换后的PDF文件为空或未生成")
-
-                    converted_files.append(output_pdf_path)
-                    file_mapping[name] = file_path  # 建立映射关系
-                    print(f"Word文档转换成功: {filename} -> {name}.pdf")
-                    logger.info(f"Word文档转换成功: {filename} -> {name}.pdf")
-                except Exception as e:
-                    error_msg = f"Word文档转换失败 {filename}: {str(e)}"
-                    print(error_msg)
-                    logger.error(error_msg)
-                    continue
-
-            elif ext_lower in ['.xls', '.xlsx']:
-                try:
-                    if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
-                        raise ValueError(f"Excel文档文件不存在或为空: {filename}")
-
-                    output_pdf_path = excel_to_pdf(file_path, self.output_dir)
-
-                    # 检查转换结果
-                    if not os.path.exists(output_pdf_path) or os.path.getsize(output_pdf_path) == 0:
-                        raise ValueError(f"Excel文档转换后的PDF文件为空或未生成")
-
-                    converted_files.append(output_pdf_path)
-                    file_mapping[name] = file_path  # 建立映射关系
-                    print(f"Excel文档转换成功: {filename} -> {name}.pdf")
-                    logger.info(f"Excel文档转换成功: {filename} -> {name}.pdf")
-                except Exception as e:
-                    error_msg = f"Excel文档转换失败 {filename}: {str(e)}"
-                    print(error_msg)
-                    logger.error(error_msg)
-                    continue
-
-            elif ext_lower in ['.rtf']:
-                try:
-                    if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
-                        raise ValueError(f"RTF文档文件不存在或为空: {filename}")
-
-                    output_pdf_path = os.path.join(self.output_dir, f"{name}.pdf")
-                    rtf_to_pdf(file_path, output_pdf_path)
-
-                    # 检查转换结果
-                    if not os.path.exists(output_pdf_path) or os.path.getsize(output_pdf_path) == 0:
-                        raise ValueError(f"RTF文档转换后的PDF文件为空或未生成")
-
-                    converted_files.append(output_pdf_path)
-                    file_mapping[name] = file_path  # 建立映射关系
-                    print(f"RTF文档转换成功: {filename} -> {name}.pdf")
-                    logger.info(f"RTF文档转换成功: {filename} -> {name}.pdf")
-                except Exception as e:
-                    error_msg = f"RTF文档转换失败 {filename}: {str(e)}"
-                    print(error_msg)
-                    logger.error(error_msg)
-                    continue
-
-            elif ext_lower in ['.pdf', '.jpg', '.jpeg', '.png']:
-                # 直接复制PDF和图片文件
-                try:
-                    if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
-                        raise ValueError(f"文件不存在或为空: {filename}")
-
-                    dest_path = os.path.join(self.output_dir, filename)
-                    shutil.copy2(file_path, dest_path)
-
-                    # 检查复制结果
-                    if not os.path.exists(dest_path) or os.path.getsize(dest_path) == 0:
-                        raise ValueError(f"文件复制失败或复制后文件为空: {filename}")
-
-                    converted_files.append(dest_path)
-                    # 对于直接复制的文件，也建立映射关系
-                    file_mapping[name] = file_path
-                    print(f"文件复制成功: {filename}")
-                    logger.info(f"文件复制成功: {filename}")
-                except Exception as e:
-                    error_msg = f"文件复制失败 {filename}: {str(e)}"
-                    print(error_msg)
-                    logger.error(error_msg)
-                    continue
-
-        return converted_files, file_mapping
-
+# 使用统一的日志系统
+logger = get_upload_logger()
+error_logger = get_error_logger()
 
 class UploadController(QObject):
     """上传功能控制器
-    
+
     负责处理文件上传和数据提取相关的业务逻辑：
     - 文件选择和验证
     - 拖拽文件处理
@@ -422,7 +35,7 @@ class UploadController(QObject):
 
     def __init__(self, view, data_manager):
         """初始化上传控制器
-        
+
         Args:
             view: 上传视图对象
             data_manager: 数据管理器
@@ -449,7 +62,7 @@ class UploadController(QObject):
 
     def _on_upload_area_clicked(self, event) -> None:
         """处理上传区域点击事件
-        
+
         Args:
             event: 鼠标事件
         """
@@ -461,7 +74,7 @@ class UploadController(QObject):
 
     def _on_files_dropped(self, file_paths: List[str]) -> None:
         """处理拖拽文件事件
-        
+
         Args:
             file_paths: 拖拽的文件路径列表
         """
@@ -474,7 +87,7 @@ class UploadController(QObject):
                 self.view,
                 "提示",
                 "请先上传文件后再进行分析",
-                QMessageBox.Ok | QMessageBox.Cancel
+                QMessageBox.Ok | QMessageBox.Cancel,
             )
             if reply == QMessageBox.Ok:
                 # 确保按钮处于可用状态，允许用户重新上传
@@ -489,7 +102,7 @@ class UploadController(QObject):
             self.view,
             "选择文件",
             "",
-            "支持的文件 (*.pdf *.jpg *.jpeg *.png *.docx *.xls *.xlsx *.rtf);;所有文件 (*.*)"
+            "支持的文件 (*.pdf *.jpg *.jpeg *.png *.docx *.xls *.xlsx *.rtf);;所有文件 (*.*)",
         )
 
         if file_paths:
@@ -497,7 +110,7 @@ class UploadController(QObject):
 
     def _process_selected_files(self, file_paths: List[str]) -> None:
         """处理选择的文件
-        
+
         Args:
             file_paths: 选择的文件路径列表
         """
@@ -531,14 +144,23 @@ class UploadController(QObject):
 
             # 检查文件是否可读
             try:
-                with open(file_path, 'rb') as f:
+                with open(file_path, "rb") as f:
                     # 尝试读取文件头部以确认文件完整性
                     f.read(1024)
             except (IOError, OSError):
                 return False
 
             _, ext = os.path.splitext(file_path)
-            valid_extensions = ['.pdf', '.jpg', '.jpeg', '.png', '.docx', '.xls', '.xlsx', '.rtf']
+            valid_extensions = [
+                ".pdf",
+                ".jpg",
+                ".jpeg",
+                ".png",
+                ".docx",
+                ".xls",
+                ".xlsx",
+                ".rtf",
+            ]
             return ext.lower() in valid_extensions
         except Exception as e:
             print(f"文件验证异常 {file_path}: {str(e)}")
@@ -572,10 +194,15 @@ class UploadController(QObject):
         Returns:
             已上传的文件名列表
         """
-        if not hasattr(self.data_manager, 'uploaded_file_name') or not self.data_manager.uploaded_file_name:
+        if (
+                not hasattr(self.data_manager, "uploaded_file_name")
+                or not self.data_manager.uploaded_file_name
+        ):
             return []
         if isinstance(self.data_manager.uploaded_file_name, str):
-            return [name.strip() for name in self.data_manager.uploaded_file_name.split(',')]
+            return [
+                name.strip() for name in self.data_manager.uploaded_file_name.split(",")
+            ]
         return []
 
     def _get_now_file_names(self) -> List[str]:
@@ -585,7 +212,7 @@ class UploadController(QObject):
             当前文件名列表
         """
         if isinstance(self.data_manager.file_name, str):
-            return [name.strip() for name in self.data_manager.file_name.split(',')]
+            return [name.strip() for name in self.data_manager.file_name.split(",")]
         return []
 
     def _show_file_exists_message(self, file_path: str) -> None:
@@ -596,12 +223,12 @@ class UploadController(QObject):
         """
         file_name = os.path.basename(file_path)
         QMessageBox.information(
-            self.view,
-            "文件已存在",
-            f"文件 {file_name} 本次已上传，不能重复上传"
+            self.view, "文件已存在", f"文件 {file_name} 本次已上传，不能重复上传"
         )
 
-    def _handle_file_validation_results(self, valid_files: List[str], invalid_files: List[str]) -> None:
+    def _handle_file_validation_results(
+            self, valid_files: List[str], invalid_files: List[str]
+    ) -> None:
         """处理文件验证结果
 
         Args:
@@ -624,7 +251,7 @@ class UploadController(QObject):
             self.view,
             "文件格式错误",
             f"以下文件格式不支持:\n{', '.join(invalid_names)}\n\n请选择PDF, JPG, PNG, DOCX, XLS, XLSX, RTF格式的文件。\n\n点击确定重新选择文件。",
-            QMessageBox.Ok | QMessageBox.Cancel
+            QMessageBox.Ok | QMessageBox.Cancel,
         )
         if reply == QMessageBox.Ok:
             # 确保按钮处于可用状态，允许用户重新上传
@@ -689,7 +316,8 @@ class UploadController(QObject):
         """创建文件按钮"""
         file_button = QPushButton(os.path.basename(file_path))
         file_button.setToolTip(file_path)
-        file_button.setStyleSheet("""
+        file_button.setStyleSheet(
+            """
             QPushButton {
                 text-align: left;
                 padding: 8px;
@@ -700,7 +328,8 @@ class UploadController(QObject):
             QPushButton:hover {
                 background-color: #f5f5f5;
             }
-        """)
+        """
+        )
         file_button.setCursor(Qt.PointingHandCursor)
         return file_button
 
@@ -708,7 +337,8 @@ class UploadController(QObject):
         """创建删除按钮"""
         delete_button = QPushButton("×")
         delete_button.setFixedSize(20, 20)
-        delete_button.setStyleSheet("""
+        delete_button.setStyleSheet(
+            """
             QPushButton {
                 color: #999999;
                 background: transparent;
@@ -720,7 +350,8 @@ class UploadController(QObject):
             QPushButton:hover {
                 color: #ff4d4f;
             }
-        """)
+        """
+        )
         delete_button.setCursor(Qt.PointingHandCursor)
         delete_button.clicked.connect(lambda: self._remove_file(file_path))
         return delete_button
@@ -775,12 +406,14 @@ class UploadController(QObject):
 
     def _reset_upload_info_display(self):
         """重置上传信息显示"""
-        self.view.upload_info.setText("""
+        self.view.upload_info.setText(
+            """
             <div style="font-size: 48px;">📁</div>
         <div style="font-size: 16px; color: #888;">点击或拖拽文件到此处上传</div>
         <div style="font-size: 12px; color: #888;">（不建议上传中英混杂的文件，容易出现解析错误）</div>   
         <div style="font-size: 12px; color: #aaa;">支持格式: pdf、jpg、jpeg、png、docx、xls、xlsx、rtf</div>
-        """)
+        """
+        )
 
     def _set_processing_state(self, processing):
         """设置处理状态"""
@@ -800,7 +433,7 @@ class UploadController(QObject):
         Returns:
             如果包含docx, xls, xlsx, rtf文件则返回True
         """
-        document_extensions = ['.docx', '.xls', '.xlsx', '.rtf']
+        document_extensions = [".docx", ".xls", ".xlsx", ".rtf"]
         for file_path in file_paths:
             _, ext = os.path.splitext(file_path)
             if ext.lower() in document_extensions:
@@ -819,8 +452,8 @@ class UploadController(QObject):
         document_files = []
         pdf_image_files = []
 
-        document_extensions = ['.docx', '.xls', '.xlsx', '.rtf']
-        pdf_image_extensions = ['.pdf', '.jpg', '.jpeg', '.png']
+        document_extensions = [".docx", ".xls", ".xlsx", ".rtf"]
+        pdf_image_extensions = [".pdf", ".jpg", ".jpeg", ".png"]
 
         for file_path in file_paths:
             _, ext = os.path.splitext(file_path)
@@ -831,10 +464,7 @@ class UploadController(QObject):
             elif ext_lower in pdf_image_extensions:
                 pdf_image_files.append(file_path)
 
-        return {
-            'documents': document_files,
-            'pdf_images': pdf_image_files
-        }
+        return {"documents": document_files, "pdf_images": pdf_image_files}
 
     # ==================== 数据分析处理 ====================
     def _start_analysis(self):
@@ -848,7 +478,9 @@ class UploadController(QObject):
         if self._has_document_files(self.uploaded_files):
             # 更新状态提示
             self.view.title.setText("正在转换文件格式，请稍候...")
-            self.view.title.setStyleSheet("color: red; font-weight: bold; font-size: 20px;")
+            self.view.title.setStyleSheet(
+                "color: red; font-weight: bold; font-size: 20px;"
+            )
             self._start_document_conversion_analysis()
         else:
             self._start_direct_analysis()
@@ -872,7 +504,9 @@ class UploadController(QObject):
         conversion_worker.start()
         self.current_workers.append(conversion_worker)
 
-    def _on_conversion_finished(self, converted_files, file_mapping, success, error_msg):
+    def _on_conversion_finished(
+            self, converted_files, file_mapping, success, error_msg
+    ):
         """处理转换完成事件"""
         self._cleanup_worker()
         if success:
@@ -882,7 +516,11 @@ class UploadController(QObject):
 
             if converted_files:
                 output_dir = os.path.dirname(converted_files[0])
-                worker = ExtractDataWorker([output_dir], process_directory=True, original_file_mapping=file_mapping)
+                worker = ExtractDataWorker(
+                    [output_dir],
+                    process_directory=True,
+                    original_file_mapping=file_mapping,
+                )
                 worker.finished.connect(self._on_worker_finished)
                 worker.status_updated.connect(self._on_status_updated)
                 worker.start()
@@ -923,7 +561,7 @@ class UploadController(QObject):
 
     def _on_status_updated(self, status_text: str):
         """处理状态更新信号
-    
+
         Args:
             status_text: 状态文本
         """
@@ -948,15 +586,20 @@ class UploadController(QObject):
             print(f"开始处理提取成功的数据: {len(data)} 条记录")
             # 立即更新UI状态，显示数据处理进度
             self.view.title.setText(f"正在处理数据({len(data)}条记录)，请稍候...")
-            self.view.title.setStyleSheet("color: blue; font-weight: bold; font-size: 20px;")
+            self.view.title.setStyleSheet(
+                "color: blue; font-weight: bold; font-size: 20px;"
+            )
             # 强制刷新UI，防止界面卡顿
             from PySide6.QtWidgets import QApplication
+
             QApplication.processEvents()
             self.processed_files_data = data
             self._merge_and_save_data(filename_str, data)
             self._cleanup_after_success()
             print(f"成功处理 {len(data)} 条记录")
-            print(f"data_manager 中的数据: {len(self.data_manager.current_data or [])} 条")
+            print(
+                f"data_manager 中的数据: {len(self.data_manager.current_data or [])} 条"
+            )
             # 立即发射信号，不延迟
             self._emit_data_ready_signal()
 
@@ -973,16 +616,22 @@ class UploadController(QObject):
             self.view.title.setText("数据审核工具 - 文件上传")
             self.view.title.setStyleSheet("")
             # 确保数据已设置
-            if hasattr(self, 'processed_files_data') and self.processed_files_data:
-                print(f"发射 file_processed 信号，数据量: {len(self.processed_files_data)}")
+            if hasattr(self, "processed_files_data") and self.processed_files_data:
+                print(
+                    f"发射 file_processed 信号，数据量: {len(self.processed_files_data)}"
+                )
                 self.file_processed.emit()
             else:
                 if self.data_manager.current_data:
                     self.processed_files_data = self.data_manager.current_data
-                    print(f"从 data_manager 恢复数据: {len(self.processed_files_data)} 条")
+                    print(
+                        f"从 data_manager 恢复数据: {len(self.processed_files_data)} 条"
+                    )
                     self.file_processed.emit()
                 else:
-                    QMessageBox.warning(self.view, "警告", "数据处理完成，但没有检测到有效数据")
+                    QMessageBox.warning(
+                        self.view, "警告", "数据处理完成，但没有检测到有效数据"
+                    )
         except Exception as e:
             print(f"发射数据就绪信号失败: {str(e)}")
             self._reset_button_states()
@@ -1020,7 +669,7 @@ class UploadController(QObject):
             self.view,
             "分析失败",
             f"{error_msg}\n\n点击确定重新尝试上传和分析文件。",
-            QMessageBox.Ok | QMessageBox.Cancel
+            QMessageBox.Ok | QMessageBox.Cancel,
         )
         if reply == QMessageBox.Ok:
             # 重新启用所有按钮，允许用户重新操作
@@ -1071,7 +720,7 @@ class UploadController(QObject):
 
     def _show_processing_error(self, error_msg: str, title: str = "处理错误"):
         """显示处理错误对话框
-        
+
         Args:
             error_msg: 错误消息
             title: 对话框标题
@@ -1080,7 +729,7 @@ class UploadController(QObject):
             self.view,
             title,
             f"{error_msg}\n\n是否要重新尝试？",
-            QMessageBox.Yes | QMessageBox.No
+            QMessageBox.Yes | QMessageBox.No,
         )
         if reply == QMessageBox.Yes:
             self._reset_button_states()

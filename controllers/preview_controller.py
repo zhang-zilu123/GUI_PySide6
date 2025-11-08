@@ -6,7 +6,6 @@ import hashlib
 import json
 import os
 import shutil
-import logging
 from typing import Dict, List, Any, Optional
 from urllib.parse import urlparse, parse_qs
 
@@ -20,6 +19,7 @@ from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkRe
 from config.config import SUBMIT_FIELD
 from data.history_manager import HistoryManager
 from data.token_manager import token_manager
+from utils.logger import get_preview_logger, get_error_logger
 from utils.upload_file_to_oss import up_local_file
 from dotenv import load_dotenv
 
@@ -27,28 +27,8 @@ load_dotenv()
 
 URL = os.getenv("URL")
 
-os.makedirs("./log", exist_ok=True)
-current_time = datetime.now().strftime("%Y%m%d-%H%M")
-log_filename = f"./log/{current_time}-提交至OA数据库.log"
-
-logger = logging.getLogger("preview")
-handler = logging.FileHandler(log_filename, encoding="utf-8")
-formatter = logging.Formatter("%(asctime)s - %(message)s")
-handler.setFormatter(formatter)
-logger.addHandler(handler)
-logger.setLevel(logging.INFO)
-
-error_log_filename = f"./log/{current_time}-error.log"
-error_handler = logging.FileHandler(error_log_filename, encoding="utf-8")
-error_formatter = logging.Formatter("%(asctime)s - %(message)s")
-error_handler.setFormatter(error_formatter)
-error_handler.setLevel(logging.ERROR)
-logger.addHandler(error_handler)
-
-with open("./device_id.txt", "r", encoding="utf-8") as f:
-    content = f.read()
-    logger.info(f"device_id:{content}")
-
+logger = get_preview_logger()
+error_logger = get_error_logger()
 
 class LoginDialog(QDialog):
     """登录弹窗，包含WebEngineView用于扫码登录操作"""
@@ -205,7 +185,6 @@ class LoginDialog(QDialog):
                 raise ValueError(data.get("message", "登录失败"))
         except Exception as e:
             QMessageBox.warning(self, "错误", f"登录响应解析失败: {e}")
-
 
 class PreviewController(QObject):
     """预览功能控制器
@@ -436,7 +415,6 @@ class PreviewController(QObject):
         # 处理数据并上传
         processed_data = self._process_data(self.data)
         logger.info(f"上传的数据:{processed_data}")
-        print('日志文件:', log_filename)
         upload_result = self._upload_to_server(processed_data)
 
         if upload_result is not None:
@@ -548,7 +526,6 @@ class PreviewController(QObject):
 
             # TODO:真实上传
             logger.error(f"上传失败的数据:{self.data}")
-            up_local_file(error_log_filename)
 
             print(f"上传失败的数据索引: {failed_indices}")
             print(f"保留的失败数据条数: {len(self.data)}, 详情: {self.data}")
@@ -603,8 +580,6 @@ class PreviewController(QObject):
             )
             print(f"上传记录已保存: {record_path}")
             logger.info(f"上传记录已保存: {record_path}")
-            # TODO:真实上传
-            up_local_file(log_filename)
         except Exception as e:
             error_msg = f"保存上传记录失败: {str(e)}"
             print(error_msg)
