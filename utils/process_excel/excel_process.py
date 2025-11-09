@@ -4,6 +4,7 @@ import excel2img
 
 from openpyxl import Workbook
 
+# 将.xls文件转换为.xlsx格式
 def convert_xls_to_xlsx(input_file, output_file):
     """
     将.xls文件转换为.xlsx格式。
@@ -35,6 +36,7 @@ def convert_xls_to_xlsx(input_file, output_file):
     workbook_xlsx.save(output_file)
     print(f"已将 '{input_file}' 转换为 '{output_file}'")
 
+# 将Excel文件拆分为多个工作表
 def split_excel_sheets(input_file, output_dir):
     """
     将一个Excel文件拆分为多个工作表，并将每个工作表保存为一个新的Excel文件。
@@ -80,6 +82,7 @@ def split_excel_sheets(input_file, output_dir):
         except Exception as e:
             print(f"保存工作表 '{sheet_name}' 时出错: {e}")
 
+# 将Excel文件转换为图片
 def convert_excel_to_images(file_paths, output_dir):
     """
     使用excel2img包将给定的Excel文件列表转换为图片。

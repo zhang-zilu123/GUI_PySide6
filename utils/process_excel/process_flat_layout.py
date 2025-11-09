@@ -51,7 +51,7 @@ def determine_header_index(rows):
     ]
     response = Generation.call(
         api_key=os.getenv("DASHSCOPE_API_KEY2"),
-        model="qwen-flash",
+        model="qwen3-max",
         messages=messages,
         result_format="message",
         enable_thinking=False,
@@ -121,6 +121,7 @@ def split_excel_by_rows_with_header(
     except Exception as e:
         print(f"切分Excel文件时出错: {e}")
 
+# 格式化目录下所有Excel文件
 def format_excel_files_in_directory(directory):
     """
     给目录下的所有Excel文件添加全部框线，并调整列宽以防止数据被遮挡。
@@ -181,12 +182,12 @@ def format_excel_files_in_directory(directory):
 
 if __name__ == "__main__":
     # 示例用法
-    file_path = "../output_sheets/Sheet1 (2).xlsx"  # 替换为你的Excel文件路径
+    file_path = "../../converted_files/excel_work_布局1_扁平式布局/split_sheets/Sheet1 (2).xlsx"  # 替换为你的Excel文件路径
     rows = read_excel_first_20_rows(file_path)
     header_index = int(determine_header_index(rows))  # 获取表头索引
     print(f"表头索引: {header_index}")
     # output_dir = "output_excel"  # 替换为你的输出目录
     # split_excel_by_rows_with_header(file_path, output_dir, header_index + 1)
-    directory = "output_excel"  # 替换为你的目录路径
-    file_paths = format_excel_files_in_directory(directory)
-    convert_excel_to_images(file_paths, "output_images")
+    # directory = "output_excel"  # 替换为你的目录路径
+    # file_paths = format_excel_files_in_directory(directory)
+    # convert_excel_to_images(file_paths, "output_images")
