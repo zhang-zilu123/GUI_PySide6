@@ -28,7 +28,7 @@ class TableExtractor:
 
         try:
             # 使用正则表达式提取所有完整的table标签
-            pattern = r'<table[^>]*>.*?</table>'
+            pattern = r"<table[^>]*>.*?</table>"
             matches = re.findall(pattern, html_content, re.DOTALL | re.IGNORECASE)
             return matches
         except (TypeError, AttributeError) as e:
@@ -39,7 +39,11 @@ class TableExtractor:
 class QwenVLMaxClient:
     """qwen-vl-max 模型调用客户端 - OpenAI 兼容模式"""
 
-    def __init__(self, api_key: str, base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"):
+    def __init__(
+        self,
+        api_key: str,
+        base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    ):
         self.client = OpenAI(
             api_key=api_key,
             base_url=base_url,
@@ -48,9 +52,11 @@ class QwenVLMaxClient:
     def encode_image(self, image_path: str) -> str:
         """将图片编码为base64"""
         with open(image_path, "rb") as image_file:
-            return base64.b64encode(image_file.read()).decode('utf-8')
+            return base64.b64encode(image_file.read()).decode("utf-8")
 
-    def call_model(self, prompt: str, image_path: str, retry_count: int = 0) -> Dict[str, Any]:
+    def call_model(
+        self, prompt: str, image_path: str, retry_count: int = 0
+    ) -> Dict[str, Any]:
         """调用qwen-vl-max模型"""
         try:
             # 构造消息体
@@ -61,14 +67,22 @@ class QwenVLMaxClient:
             completion = self.client.chat.completions.create(
                 model="qwen-vl-max-latest",
                 messages=[
-                    {"role": "user", "content": [
-                        {"type": "text", "text": prompt},
-                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}}
-                    ]}
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{image_b64}"
+                                },
+                            },
+                        ],
+                    }
                 ],
                 temperature=0,
                 max_tokens=10000,
-                seed=42
+                seed=42,
             )
 
             print(f"响应成功，内容长度: {len(completion.choices[0].message.content)}")
@@ -76,11 +90,9 @@ class QwenVLMaxClient:
             # 转换为原有格式以保持兼容性
             result = {
                 "output": {
-                    "choices": [{
-                        "message": {
-                            "content": completion.choices[0].message.content
-                        }
-                    }]
+                    "choices": [
+                        {"message": {"content": completion.choices[0].message.content}}
+                    ]
                 }
             }
 
@@ -100,20 +112,22 @@ class TableValidator:
         errors = []
 
         # 检查是否只包含一个table标签
-        table_count = table_html.count('<table')
+        table_count = table_html.count("<table")
         if table_count != 1:
             errors.append(f"应该只包含一个table标签，实际包含{table_count}个")
 
         # 检查HTML是否合法
         try:
-            if not table_html.strip().startswith('<table') or not table_html.strip().endswith('</table>'):
+            if not table_html.strip().startswith(
+                "<table"
+            ) or not table_html.strip().endswith("</table>"):
                 errors.append("HTML表格格式不完整")
         except Exception as e:
             errors.append(f"HTML解析错误: {e}")
 
         # 检查是否包含多余的文本
-        clean_html = re.sub(r'<[^>]+>', '', table_html)
-        if '```' in clean_html or 'markdown' in clean_html.lower():
+        clean_html = re.sub(r"<[^>]+>", "", table_html)
+        if "```" in clean_html or "markdown" in clean_html.lower():
             errors.append("输出包含不应有的代码块标记或说明文字")
 
         return len(errors) == 0, errors
@@ -122,13 +136,13 @@ class TableValidator:
         """从表格中提取所有可能的金额数值"""
         amounts = []
         # 匹配金额格式：支持千分位逗号，1-4位小数
-        amount_pattern = r'\b\d{1,3}(?:,\d{3})*(?:\.\d{1,4})?\b'
+        amount_pattern = r"\b\d{1,3}(?:,\d{3})*(?:\.\d{1,4})?\b"
         matches = re.findall(amount_pattern, table_html)
 
         for match in matches:
             try:
                 # 移除千分位逗号
-                clean_amount = match.replace(',', '')
+                clean_amount = match.replace(",", "")
                 amount = float(clean_amount)
                 # 过滤异常值（避免年份、编号等被误判为金额）
                 if 0.01 <= amount <= 1000000:
@@ -138,7 +152,9 @@ class TableValidator:
 
         return amounts
 
-    def check_sum_consistency(self, table_html: str, expected_sum: Optional[float]) -> Tuple[bool, float, str]:
+    def check_sum_consistency(
+        self, table_html: str, expected_sum: Optional[float]
+    ) -> Tuple[bool, float, str]:
         """检查表格中金额的合计一致性"""
         amounts = self.extract_amounts(table_html)
         calculated_sum = sum(amounts)
@@ -161,9 +177,10 @@ class TableValidator:
 class TableCorrector:
     """统一的表格纠错器 - 支持多文件批量处理"""
 
-    def __init__(self, api_key: str):
+    def __init__(self, api_key: str, status_callback=None):
         self.api_key = api_key
         self.executor = ThreadPoolExecutor(max_workers=4)
+        self.status_callback = status_callback  # 状态更新回调函数
 
     def _extract_html_from_block(self, block: Dict) -> Optional[str]:
         """从JSON块中深度搜索并提取HTML内容"""
@@ -211,12 +228,12 @@ class TableCorrector:
         # 标准化处理：移除多余空格、统一标点
         def normalize_html(html):
             # 移除多余空格
-            html = re.sub(r'\s+', ' ', html)
+            html = re.sub(r"\s+", " ", html)
             # 统一中英文标点
-            html = html.replace('：', ':')
-            html = html.replace('，', ',')
+            html = html.replace("：", ":")
+            html = html.replace("，", ",")
             # 移除HTML标签间的空格
-            html = re.sub(r'>\s+<', '><', html)
+            html = re.sub(r">\s+<", "><", html)
             return html.strip().lower()
 
         norm_html1 = normalize_html(html1)
@@ -226,7 +243,9 @@ class TableCorrector:
         matcher = SequenceMatcher(None, norm_html1, norm_html2)
         return matcher.ratio()
 
-    def _create_table_image_mapping(self, md_tables: List[str], json_data: dict, images_dir: Path) -> Dict[int, str]:
+    def _create_table_image_mapping(
+        self, md_tables: List[str], json_data: dict, images_dir: Path
+    ) -> Dict[int, str]:
         """使用相似度匹配创建表格-图片映射"""
         print("开始创建表格-图片映射...")
 
@@ -290,14 +309,19 @@ class TableCorrector:
             # 根据相似度决定映射
             if best_similarity >= similarity_threshold and best_match:
                 mapping[i] = best_match
-                print(f"  表格 {i} 相似度匹配成功: {best_similarity:.3f} -> {Path(best_match).name}")
+                print(
+                    f"  表格 {i} 相似度匹配成功: {best_similarity:.3f} -> {Path(best_match).name}"
+                )
             else:
                 mapping[i] = fallback_image
                 if best_similarity > 0:
                     print(
-                        f"  表格 {i} 相似度不足({best_similarity:.3f}), 使用回退图片: {Path(fallback_image).name if fallback_image else 'None'}")
+                        f"  表格 {i} 相似度不足({best_similarity:.3f}), 使用回退图片: {Path(fallback_image).name if fallback_image else 'None'}"
+                    )
                 else:
-                    print(f"  表格 {i} 无匹配, 使用回退图片: {Path(fallback_image).name if fallback_image else 'None'}")
+                    print(
+                        f"  表格 {i} 无匹配, 使用回退图片: {Path(fallback_image).name if fallback_image else 'None'}"
+                    )
 
         print(f"建立映射完成: {len(mapping)} 个表格")
         return mapping
@@ -309,17 +333,17 @@ class TableCorrector:
 
         # 多种合计表达方式的正则模式
         patterns = [
-            r'合计[^:：]*[:：]\s*([0-9,]+\.?\d*)',
-            r'LUMP\s+SUM[^:：]*[:：]\s*([0-9,]+\.?\d*)',
-            r'总计[^:：]*[:：]\s*([0-9,]+\.?\d*)',
-            r'Total[^:：]*[:：]\s*([0-9,]+\.?\d*)'
+            r"合计[^:：]*[:：]\s*([0-9,]+\.?\d*)",
+            r"LUMP\s+SUM[^:：]*[:：]\s*([0-9,]+\.?\d*)",
+            r"总计[^:：]*[:：]\s*([0-9,]+\.?\d*)",
+            r"Total[^:：]*[:：]\s*([0-9,]+\.?\d*)",
         ]
 
         for pattern in patterns:
             try:
                 match = re.search(pattern, markdown_content, re.IGNORECASE)
                 if match:
-                    amount_str = match.group(1).replace(',', '')
+                    amount_str = match.group(1).replace(",", "")
                     return float(amount_str)
             except (ValueError, AttributeError, TypeError):
                 continue
@@ -379,8 +403,13 @@ class TableCorrector:
         except (KeyError, IndexError, TypeError):
             return None
 
-    def _process_single_table(self, table_html: str, table_index: int, image_path: str,
-                              expected_sum: Optional[float]) -> Dict[str, Any]:
+    def _process_single_table(
+        self,
+        table_html: str,
+        table_index: int,
+        image_path: str,
+        expected_sum: Optional[float],
+    ) -> Dict[str, Any]:
         """处理单个表格"""
         table_report = {
             "table_index": table_index,
@@ -393,7 +422,9 @@ class TableCorrector:
             "notes": "",
             "errors": [],
             "timing": {},
-            "original_table": table_html[:200] + "..." if len(table_html) > 200 else table_html
+            "original_table": (
+                table_html[:200] + "..." if len(table_html) > 200 else table_html
+            ),
         }
 
         # 创建独立的组件实例
@@ -401,6 +432,10 @@ class TableCorrector:
         validator = TableValidator()
 
         try:
+            # 发送状态更新
+            if self.status_callback:
+                self.status_callback(f"正在纠正表格 {table_index + 1}...")
+
             # 构造提示词
             prompt = self._create_prompt(table_html, expected_sum)
 
@@ -419,8 +454,13 @@ class TableCorrector:
             # 如果第一次失败，尝试重试
             if not corrected_table:
                 print(f"表格 {table_index + 1} 第一次处理失败，尝试重试...")
-                retry_prompt = prompt + "\n\n上次输出包含了额外内容，请严格只输出一个 <table>...</table>，不要任何解释："
-                retry_response = client.call_model(retry_prompt, image_path, retry_count=1)
+                retry_prompt = (
+                    prompt
+                    + "\n\n上次输出包含了额外内容，请严格只输出一个 <table>...</table>，不要任何解释："
+                )
+                retry_response = client.call_model(
+                    retry_prompt, image_path, retry_count=1
+                )
                 table_report["had_retry"] = True
 
                 if "error" not in retry_response:
@@ -432,14 +472,18 @@ class TableCorrector:
 
             # 验证输出
             validation_start = time.time()
-            html_valid, validation_errors = validator.validate_html_table(corrected_table)
+            html_valid, validation_errors = validator.validate_html_table(
+                corrected_table
+            )
             table_report["html_valid"] = html_valid
 
             if validation_errors:
                 table_report["errors"].extend(validation_errors)
 
             # 检查合计一致性
-            sum_consistent, calculated_sum, sum_notes = validator.check_sum_consistency(corrected_table, expected_sum)
+            sum_consistent, calculated_sum, sum_notes = validator.check_sum_consistency(
+                corrected_table, expected_sum
+            )
             table_report["sum_check_pass"] = sum_consistent
             table_report["calculated_sum"] = calculated_sum
             table_report["notes"] = sum_notes
@@ -468,12 +512,24 @@ class TableCorrector:
     def _extract_info_async(self, corrected_file: str) -> List[Dict]:
         """异步提取结构化数据"""
         try:
+            # 发送状态更新
+            if self.status_callback:
+                file_name = Path(corrected_file).stem
+                self.status_callback(f"正在提取结构化数据: {file_name}...")
+
             temp = extract_info_from_md(corrected_file)
             extracted_info = json.loads(temp).get("费用明细", [])
             print(f"异步提取完成: {corrected_file}, 条数: {len(extracted_info)}")
+
+            # 发送完成状态
+            if self.status_callback:
+                self.status_callback(f"数据提取完成，共 {len(extracted_info)} 条记录")
+
             return extracted_info
         except Exception as e:
             print(f"异步提取失败: {corrected_file}, 错误: {e}")
+            if self.status_callback:
+                self.status_callback(f"数据提取失败: {str(e)}")
             return []
 
     def _process_single_folder(self, folder_path: Path) -> Dict[str, Any]:
@@ -492,7 +548,7 @@ class TableCorrector:
             "overall_errors": [],
             "timing": {},
             "model_version": "qwen-vl-max",
-            "extracted_info": []
+            "extracted_info": [],
         }
 
         start_time = time.time()
@@ -501,7 +557,9 @@ class TableCorrector:
             print(f"\n=== 处理文件夹: {folder_name} ===")
 
             # 查找文件
-            md_files = [f for f in auto_dir.glob("*.md") if not f.name.endswith('.corrected.md')]
+            md_files = [
+                f for f in auto_dir.glob("*.md") if not f.name.endswith(".corrected.md")
+            ]
             json_files = list(auto_dir.glob("*_middle.json"))
             images_dir = auto_dir / "images"
 
@@ -524,10 +582,10 @@ class TableCorrector:
             print(f"MD文件: {md_file.name}")
             print(f"JSON文件: {json_file.name}")
 
-            with open(md_file, 'r', encoding='utf-8') as f:
+            with open(md_file, "r", encoding="utf-8") as f:
                 markdown_content = f.read()
 
-            with open(json_file, 'r', encoding='utf-8') as f:
+            with open(json_file, "r", encoding="utf-8") as f:
                 json_data = json.load(f)
 
             # 提取所有表格
@@ -556,11 +614,13 @@ class TableCorrector:
             print(f"发现 {len(all_tables)} 个表格")
 
             # 创建表格-图片映射
-            table_image_mapping = self._create_table_image_mapping(all_tables, json_data, images_dir)
+            table_image_mapping = self._create_table_image_mapping(
+                all_tables, json_data, images_dir
+            )
 
             if not table_image_mapping:
                 report["overall_errors"].append("创建表格-图片映射失败")
-                print('创建表格-图片映射失败')
+                print("创建表格-图片映射失败")
                 return report
 
             # 提取预期合计
@@ -575,37 +635,53 @@ class TableCorrector:
             for i, table_html in enumerate(all_tables):
                 print(f"\n--- 处理第 {i + 1}/{len(all_tables)} 个表格 ---")
 
+                # 发送处理进度
+                if self.status_callback:
+                    self.status_callback(f"正在处理表格 {i + 1}/{len(all_tables)}...")
+
                 image_path = table_image_mapping.get(i)
                 if not image_path:
                     print(f"表格 {i} 未找到对应图片，跳过")
                     continue
 
                 print(f"使用图片: {Path(image_path).name}")
-                table_report = self._process_single_table(table_html, i, image_path, expected_sum)
+                table_report = self._process_single_table(
+                    table_html, i, image_path, expected_sum
+                )
                 report["table_reports"].append(table_report)
                 report["tables_processed"] += 1
 
                 if table_report["success"]:
                     report["tables_success"] += 1
                     # 替换原表格为纠错后的表格
-                    updated_markdown = updated_markdown.replace(table_html, table_report["corrected_table"], 1)
+                    updated_markdown = updated_markdown.replace(
+                        table_html, table_report["corrected_table"], 1
+                    )
 
             # 写入纠错后的文件
             if report["tables_success"] > 0:
+                if self.status_callback:
+                    self.status_callback(f"正在生成纠错文件...")
+
                 corrected_file = auto_dir / f"{md_file.stem}.corrected.md"
-                with open(corrected_file, 'w', encoding='utf-8') as f:
+                with open(corrected_file, "w", encoding="utf-8") as f:
                     f.write(updated_markdown)
 
                 report["success"] = True
                 report["output_file"] = str(corrected_file)
                 print(f"已生成纠错文件: {corrected_file.name}")
 
-                # 同步提取结构化数据
+                # 同步提取结构化数据（这里会调用大模型，可能耗时较长）
+                if self.status_callback:
+                    self.status_callback(f"正在大模型提取结构化数据，请稍候...")
+
                 extracted_info = self._extract_info_async(str(corrected_file))
                 report["extracted_info"].extend(extracted_info)
 
             # 生成汇总统计
-            total_calculated_sum = sum(tr.get("calculated_sum", 0) for tr in report["table_reports"])
+            total_calculated_sum = sum(
+                tr.get("calculated_sum", 0) for tr in report["table_reports"]
+            )
 
             report["summary"] = {
                 "total_tables": len(all_tables),
@@ -613,7 +689,9 @@ class TableCorrector:
                 "failed_tables": len(all_tables) - report["tables_success"],
                 "total_calculated_sum": total_calculated_sum,
                 "expected_sum": expected_sum,
-                "sum_difference": abs(total_calculated_sum - expected_sum) if expected_sum else None
+                "sum_difference": (
+                    abs(total_calculated_sum - expected_sum) if expected_sum else None
+                ),
             }
 
         except Exception as e:
@@ -632,7 +710,7 @@ class TableCorrector:
             "total_tables": 0,
             "successful_tables": 0,
             "total_time": 0,
-            "info_dict": {}
+            "info_dict": {},
         }
 
         start_time = time.time()
@@ -667,7 +745,9 @@ class TableCorrector:
 
                 # 合并提取的结构化数据
                 if "extracted_info" in folder_report:
-                    results["info_dict"][folder_report["folder_name"]] = folder_report["extracted_info"]
+                    results["info_dict"][folder_report["folder_name"]] = folder_report[
+                        "extracted_info"
+                    ]
 
         results["total_time"] = time.time() - start_time
 
@@ -686,8 +766,10 @@ def main():
     """主函数"""
     # 配置
     from dotenv import load_dotenv
+
     load_dotenv()
     import os
+
     API_KEY = os.getenv("DASHSCOPE_API_KEY1")
     current_dir = Path(__file__).resolve().parents[1]
     OUTPUT_DIR = current_dir / "output"
@@ -706,7 +788,7 @@ def main():
 
     # 处理所有文件
     results = corrector.process_directory(OUTPUT_DIR)
-    print('results', results)
+    print("results", results)
 
     # 保存总体报告
     # summary_file = OUTPUT_DIR / "correction_summary_multi.json"
