@@ -60,6 +60,7 @@ class UploadController(QObject):
         self.view.clear_requested.connect(self.clear_file_list)
         self.view.analyze_requested.connect(self._on_analyze_requested)
         self.view.files_dropped.connect(self._on_files_dropped)
+        self.view.files_pasted.connect(self._on_files_pasted)
 
     def _on_upload_area_clicked(self, event) -> None:
         """处理上传区域点击事件
@@ -78,6 +79,14 @@ class UploadController(QObject):
 
         Args:
             file_paths: 拖拽的文件路径列表
+        """
+        self._process_selected_files(file_paths)
+
+    def _on_files_pasted(self, file_paths: List[str]) -> None:
+        """处理粘贴文件事件
+
+        Args:
+            file_paths: 粘贴的文件路径列表
         """
         self._process_selected_files(file_paths)
 
@@ -118,6 +127,9 @@ class UploadController(QObject):
         valid_files = []
         invalid_files = []
 
+        # 记录总文件数用于提示
+        total_count = len(file_paths)
+
         for file_path in file_paths:
             if self._validate_file(file_path):
                 valid_files.append(file_path)
@@ -128,7 +140,7 @@ class UploadController(QObject):
             else:
                 invalid_files.append(file_path)
 
-        self._handle_file_validation_results(valid_files, invalid_files)
+        self._handle_file_validation_results(valid_files, invalid_files, total_count)
 
     def _validate_file(self, file_path: str) -> bool:
         """验证文件格式
@@ -228,35 +240,71 @@ class UploadController(QObject):
         )
 
     def _handle_file_validation_results(
-        self, valid_files: List[str], invalid_files: List[str]
+        self, valid_files: List[str], invalid_files: List[str], total_count: int = 0
     ) -> None:
         """处理文件验证结果
 
         Args:
             valid_files: 有效文件列表
             invalid_files: 无效文件列表
+            total_count: 总文件数
         """
         if invalid_files:
-            self._show_invalid_files_message(invalid_files)
+            self._show_invalid_files_message(
+                invalid_files, len(valid_files), total_count
+            )
         if valid_files:
             self._add_files_to_list(valid_files)
 
-    def _show_invalid_files_message(self, invalid_files: List[str]) -> None:
+    def _show_invalid_files_message(
+        self, invalid_files: List[str], valid_count: int = 0, total_count: int = 0
+    ) -> None:
         """显示无效文件消息
 
         Args:
             invalid_files: 无效文件列表
+            valid_count: 有效文件数量
+            total_count: 总文件数
         """
         invalid_names = [os.path.basename(fp) for fp in invalid_files]
-        reply = QMessageBox.warning(
-            self.view,
-            "文件格式错误",
-            f"以下文件格式不支持:\n{', '.join(invalid_names)}\n\n请选择PDF, JPG, PNG, DOCX, XLS, XLSX, RTF格式的文件。\n\n点击确定重新选择文件。",
-            QMessageBox.Ok | QMessageBox.Cancel,
-        )
-        if reply == QMessageBox.Ok:
-            # 确保按钮处于可用状态，允许用户重新上传
-            self._reset_button_states()
+        invalid_count = len(invalid_files)
+
+        # 构建消息内容
+        message_parts = []
+
+        if total_count > 0:
+            message_parts.append(f"共选择了 {total_count} 个文件")
+
+        if valid_count > 0:
+            message_parts.append(f"其中 {valid_count} 个文件已成功添加")
+
+        message_parts.append(f"\n以下 {invalid_count} 个文件格式不支持，已自动过滤：")
+
+        # 限制显示的文件名数量，避免消息框过长
+        max_display = 10
+        if invalid_count <= max_display:
+            message_parts.append("\n• " + "\n• ".join(invalid_names))
+        else:
+            message_parts.append("\n• " + "\n• ".join(invalid_names[:max_display]))
+            message_parts.append(f"\n... 还有 {invalid_count - max_display} 个文件")
+
+        message_parts.append("\n\n支持的格式：PDF, JPG, PNG, DOCX, XLS, XLSX, RTF")
+
+        message = "\n".join(message_parts)
+
+        # 如果有有效文件，使用信息提示；否则使用警告提示
+        if valid_count > 0:
+            QMessageBox.information(self.view, "文件格式提示", message, QMessageBox.Ok)
+        else:
+            reply = QMessageBox.warning(
+                self.view,
+                "文件格式错误",
+                message + "\n\n点击确定重新选择文件。",
+                QMessageBox.Ok | QMessageBox.Cancel,
+            )
+            if reply == QMessageBox.Ok:
+                # 确保按钮处于可用状态，允许用户重新上传
+                self._reset_button_states()
 
     # ==================== 文件列表管理 ====================
     def _add_files_to_list(self, file_paths):
@@ -410,7 +458,7 @@ class UploadController(QObject):
         self.view.upload_info.setText(
             """
             <div style="font-size: 48px;">📁</div>
-        <div style="font-size: 16px; color: #888;">点击或拖拽文件到此处上传</div>
+        <div style="font-size: 16px; color: #888;">点击、拖拽或复制粘贴（Ctrl+V）文件到此处上传</div>
         <div style="font-size: 12px; color: #888;">（不建议上传中英混杂的文件，容易出现解析错误）</div>   
         <div style="font-size: 12px; color: #aaa;">支持格式: pdf、jpg、jpeg、png、docx、xls、xlsx、rtf</div>
         """
