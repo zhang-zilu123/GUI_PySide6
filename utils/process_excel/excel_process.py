@@ -4,7 +4,6 @@ import excel2img
 
 from openpyxl import Workbook
 
-
 def convert_xls_to_xlsx(input_file, output_file):
     """
     将.xls文件转换为.xlsx格式。
@@ -35,7 +34,6 @@ def convert_xls_to_xlsx(input_file, output_file):
     # 保存新的.xlsx文件
     workbook_xlsx.save(output_file)
     print(f"已将 '{input_file}' 转换为 '{output_file}'")
-
 
 def split_excel_sheets(input_file, output_dir):
     """
@@ -82,7 +80,6 @@ def split_excel_sheets(input_file, output_dir):
         except Exception as e:
             print(f"保存工作表 '{sheet_name}' 时出错: {e}")
 
-
 def convert_excel_to_images(file_paths, output_dir):
     """
     使用excel2img包将给定的Excel文件列表转换为图片。
@@ -114,10 +111,9 @@ def convert_excel_to_images(file_paths, output_dir):
             except Exception as e:
                 print(f"转换 '{input_file}' 时出错: {e}")
 
-
 if __name__ == "__main__":
     # 示例用法
-    input_file = "./布局1_扁平式布局.xls"  # 替换为你的输入文件路径
+    input_file = "../布局1_扁平式布局.xls"  # 替换为你的输入文件路径
     # output_dir = "output_sheets"  # 替换为你想要的输出目录
     # convert_xls_to_xlsx(input_file, "output.xlsx")
     # input_file = "./output.xlsx"
@@ -126,11 +122,11 @@ if __name__ == "__main__":
         "./布局2_主表+子表布局.xls",
         "./布局3_分块布局.xls",
     ]
-    convert_xls_to_xlsx(input_files[0], "布局2_主表+子表布局.xlsx")
-    convert_xls_to_xlsx(input_files[1], "布局3_分块布局.xlsx")
+    convert_xls_to_xlsx(input_files[0], "../布局2_主表+子表布局.xlsx")
+    convert_xls_to_xlsx(input_files[1], "../布局3_分块布局.xlsx")
     input_files = [
         "./布局2_主表+子表布局.xlsx",
         "./布局3_分块布局.xlsx",
     ]
-    output_dir = "output_images"  # 替换为你想要的输出目录
+    output_dir = "../output_images"  # 替换为你想要的输出目录
     convert_excel_to_images(input_files, output_dir)
