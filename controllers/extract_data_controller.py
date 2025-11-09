@@ -14,6 +14,7 @@ from utils.upload_file_to_oss import up_local_file
 logger = get_file_conversion_logger()
 error_logger = get_error_logger()
 
+
 class ExtractDataWorker(QThread):
     """数据提取工作线程
 
@@ -26,10 +27,10 @@ class ExtractDataWorker(QThread):
     status_updated = Signal(str)
 
     def __init__(
-            self,
-            file_paths: List[str],
-            process_directory: bool = False,
-            original_file_mapping: Dict[str, str] = None,
+        self,
+        file_paths: List[str],
+        process_directory: bool = False,
+        original_file_mapping: Dict[str, str] = None,
     ):
         """初始化工作线程
 
@@ -125,7 +126,7 @@ class ExtractDataWorker(QThread):
             logger.error(error_msg)
             self.finished.emit("", [], False, error_msg)
 
-    def _extract_data_from_pdf(self, file_paths: List[str]) -> List[Dict[str, Any]]:
+    def extract_data_from_pdf(self, file_paths: List[str]) -> List[Dict[str, Any]]:
         """从PDF文件中提取数据
 
         Args:
@@ -163,7 +164,12 @@ class ExtractDataWorker(QThread):
             # 解析PDF
             self.status_updated.emit("正在识别PDF，请稍候...")
             start_time = time.time()
-            parse_doc(path_list=file_paths, output_dir="../output", backend="pipeline")
+            # 使用项目根目录下的 output 文件夹
+            root_dir = Path(__file__).resolve().parents[1]
+            output_dir = root_dir / "output"
+            parse_doc(
+                path_list=file_paths, output_dir=str(output_dir), backend="pipeline"
+            )
             end_time = time.time()
             print(f"PDF解析完成，耗时 {end_time - start_time:.2f} 秒")
 
@@ -215,15 +221,18 @@ class ExtractDataWorker(QThread):
 
     def _cleanup_temp_files(self) -> None:
         """清理临时文件"""
-        if os.path.exists("./output"):
-            shutil.rmtree("./output")
-            print("删除临时文件夹 ./output")
+        # 使用项目根目录下的 output 文件夹
+        root_dir = Path(__file__).resolve().parents[1]
+        output_dir = root_dir / "output"
+        if output_dir.exists():
+            shutil.rmtree(str(output_dir))
+            print(f"删除临时文件夹 {output_dir}")
 
     def _process_extracted_data(
-            self,
-            info_dict: Dict[str, Any],
-            file_paths: List[str],
-            original_file_mapping: Dict[str, str] = None,
+        self,
+        info_dict: Dict[str, Any],
+        file_paths: List[str],
+        original_file_mapping: Dict[str, str] = None,
     ) -> List[Dict[str, Any]]:
         """处理提取的数据"""
         # 建立文件名到完整路径的映射
