@@ -18,11 +18,12 @@ DASH_KEYS = [
     os.getenv("DASHSCOPE_API_KEY3"),
 ]
 
-def extract_info_from_md(md_file_path: str) -> str:
+def extract_info_from_md(md_file_path: str, content: str = "") -> str:
     """从单个markdown文件中提取信息
     
     Args:
         md_file_path: Markdown文件路径
+        content: 可选的Markdown内容字符串，若提供则不读取文件
         
     Returns:
         提取的JSON字符串结果
@@ -31,9 +32,11 @@ def extract_info_from_md(md_file_path: str) -> str:
         FileNotFoundError: 当文件不存在时
         Exception: 当API调用失败时
     """
-    content = _read_markdown_file(md_file_path)
+
     if not content:
-        return "{}"
+        content = _read_markdown_file(md_file_path)
+        if not content:
+            return "{}"
 
     try:
         client = _create_openai_client()

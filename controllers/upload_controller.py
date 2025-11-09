@@ -18,6 +18,7 @@ from controllers.file_conversion_controller import DocumentConversionWorker
 logger = get_upload_logger()
 error_logger = get_error_logger()
 
+
 class UploadController(QObject):
     """上传功能控制器
 
@@ -194,8 +195,10 @@ class UploadController(QObject):
         Returns:
             已上传的文件名列表
         """
-        if (not hasattr(self.data_manager, "uploaded_file_name")
-                or not self.data_manager.uploaded_file_name):
+        if (
+            not hasattr(self.data_manager, "uploaded_file_name")
+            or not self.data_manager.uploaded_file_name
+        ):
             return []
         if isinstance(self.data_manager.uploaded_file_name, str):
             return [
@@ -225,7 +228,7 @@ class UploadController(QObject):
         )
 
     def _handle_file_validation_results(
-            self, valid_files: List[str], invalid_files: List[str]
+        self, valid_files: List[str], invalid_files: List[str]
     ) -> None:
         """处理文件验证结果
 
@@ -493,7 +496,11 @@ class UploadController(QObject):
 
     def _start_document_conversion_analysis(self):
         """开始文档转换分析"""
-        output_dir = os.path.join(os.getcwd(), "converted_files")
+        # 使用项目根目录下的 converted_files 文件夹
+        from pathlib import Path
+
+        root_dir = Path(__file__).resolve().parents[1]
+        output_dir = str(root_dir / "converted_files")
 
         # 创建转换工作线程
         conversion_worker = DocumentConversionWorker(self.uploaded_files, output_dir)
@@ -503,16 +510,36 @@ class UploadController(QObject):
         self.current_workers.append(conversion_worker)
 
     def _on_conversion_finished(
-            self, converted_files, file_mapping, success, error_msg
+        self, converted_files, file_mapping, success, error_msg, excel_result=None
     ):
         """处理转换完成事件"""
         self._cleanup_worker()
         if success:
-            # 转换成功，开始PDF分析
-            print(f"文档转换完成，开始分析 {len(converted_files)} 个文件")
-            print(f"文件映射: {file_mapping}")
+            # 检查是否有 Excel 的特殊处理结果
+            if excel_result and excel_result.get("excel_data"):
+                # Excel 文件已经完成数据提取
+                print(
+                    f"Excel 数据提取完成，共 {len(excel_result['excel_data'])} 条记录"
+                )
+                self._on_status_updated("Excel 数据提取完成...")
 
-            if converted_files:
+                # 直接使用提取的数据
+                excel_data = excel_result.get("excel_data", [])
+                filename_str = ", ".join(
+                    [
+                        os.path.basename(f)
+                        for f in self.uploaded_files
+                        if f.lower().endswith((".xls", ".xlsx"))
+                    ]
+                )
+
+                # 直接触发完成事件
+                self._on_worker_finished(filename_str, excel_data, True, "")
+            elif converted_files:
+                # 转换成功，开始PDF分析
+                print(f"文档转换完成，开始分析 {len(converted_files)} 个文件")
+                print(f"文件映射: {file_mapping}")
+
                 output_dir = os.path.dirname(converted_files[0])
                 worker = ExtractDataWorker(
                     [output_dir],
@@ -633,11 +660,14 @@ class UploadController(QObject):
 
     def _cleanup_after_success(self):
         """成功后的清理工作"""
-        # 清理转换文件夹
-        converted_dir = os.path.join(os.getcwd(), "converted_files")
-        if os.path.exists(converted_dir):
+        # 清理转换文件夹 - 使用项目根目录
+        from pathlib import Path
+
+        root_dir = Path(__file__).resolve().parents[1]
+        converted_dir = root_dir / "converted_files"
+        if converted_dir.exists():
             try:
-                shutil.rmtree(converted_dir)
+                shutil.rmtree(str(converted_dir))
                 print("清理转换文件夹成功")
             except Exception as e:
                 print(f"清理转换文件夹失败: {str(e)}")
@@ -693,10 +723,14 @@ class UploadController(QObject):
 
     def _cleanup_conversion_files(self):
         """清理转换文件夹"""
-        converted_dir = os.path.join(os.getcwd(), "converted_files")
-        if os.path.exists(converted_dir):
+        # 使用项目根目录
+        from pathlib import Path
+
+        root_dir = Path(__file__).resolve().parents[1]
+        converted_dir = root_dir / "converted_files"
+        if converted_dir.exists():
             try:
-                shutil.rmtree(converted_dir)
+                shutil.rmtree(str(converted_dir))
                 print("清理转换文件夹成功")
             except Exception as e:
                 print(f"清理转换文件夹失败: {str(e)}")
