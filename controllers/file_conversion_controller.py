@@ -28,6 +28,7 @@ from utils.process_excel.process_excel_blocks import (
 logger = get_file_conversion_logger()
 error_logger = get_error_logger()
 
+
 class DocumentConversionWorker(QThread):
     """文档转换工作线程"""
 
@@ -72,7 +73,7 @@ class DocumentConversionWorker(QThread):
             self.conversion_finished.emit([], {}, False, error_msg, {})
 
     def _convert_documents_and_copy_files(
-            self,
+        self,
     ) -> Tuple[List[str], Dict[str, str], Dict[str, Any]]:
         """转换文档文件并复制其他文件到输出目录
 
@@ -102,8 +103,8 @@ class DocumentConversionWorker(QThread):
 
                     # 检查转换结果
                     if (
-                            not os.path.exists(output_pdf_path)
-                            or os.path.getsize(output_pdf_path) == 0
+                        not os.path.exists(output_pdf_path)
+                        or os.path.getsize(output_pdf_path) == 0
                     ):
                         raise ValueError(f"Word文档转换后的PDF文件为空或未生成")
 
@@ -158,8 +159,8 @@ class DocumentConversionWorker(QThread):
 
                     # 检查转换结果
                     if (
-                            not os.path.exists(output_pdf_path)
-                            or os.path.getsize(output_pdf_path) == 0
+                        not os.path.exists(output_pdf_path)
+                        or os.path.getsize(output_pdf_path) == 0
                     ):
                         raise ValueError(f"RTF文档转换后的PDF文件为空或未生成")
 
@@ -297,16 +298,11 @@ class DocumentConversionWorker(QThread):
                 if image_files:
                     self.status_updated.emit(f"正在提取扁平式布局数据: {sheet_name}")
                     flat_data = self._extract_flat_layout_data(image_files)
-                    print(f'扁平式布局提取数据数量: {flat_data}')
+                    print(f"扁平式布局提取数据数量: {flat_data}")
                     for item in flat_data:
                         item["源文件"] = file_path
                     result["excel_data"].extend(flat_data)
 
-                root_dir = Path(__file__).resolve().parents[1]
-                output_dir = root_dir / "output"
-                if output_dir.exists():
-                    shutil.rmtree(str(output_dir))
-                    print(f"删除临时文件夹 {output_dir}")
                 result["type"] = "flat"
 
             elif layout_num == 2:
@@ -352,7 +348,7 @@ class DocumentConversionWorker(QThread):
         return result
 
     def _process_flat_layout(
-            self, excel_file: str, sheet_name: str, work_dir: str
+        self, excel_file: str, sheet_name: str, work_dir: str
     ) -> list:
         """
         处理扁平式布局的 Excel
@@ -393,10 +389,10 @@ class DocumentConversionWorker(QThread):
         return image_files
 
     def _process_block_layout(
-            self,
-            excel_file: str,
-            sheet_name: str,
-            work_dir: str,
+        self,
+        excel_file: str,
+        sheet_name: str,
+        work_dir: str,
     ) -> dict:
         """
         处理分块布局的 Excel
@@ -433,6 +429,9 @@ class DocumentConversionWorker(QThread):
 
         # 创建一个临时的提取工作线程（但不启动线程，直接调用方法）
         worker = ExtractDataWorker(image_files)
+
+        # 连接状态更新信号，将子worker的信号转发到当前worker
+        worker.status_updated.connect(lambda msg: self.status_updated.emit(msg))
 
         try:
             # 直接调用提取方法
@@ -476,7 +475,7 @@ class DocumentConversionWorker(QThread):
             return False
 
     def _extract_block_layout_data(
-            self, markdown_content: str, file_path: str
+        self, markdown_content: str, file_path: str
     ) -> List[Dict[str, Any]]:
         """
         从分块布局的 markdown 内容中提取结构化数据

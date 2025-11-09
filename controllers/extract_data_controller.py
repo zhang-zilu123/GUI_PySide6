@@ -179,7 +179,7 @@ class ExtractDataWorker(QThread):
             print("完成PDF文件解析", info_dict)
 
             # 清理临时文件
-            # self._cleanup_temp_files()
+            self._cleanup_temp_files()
 
             # 构建返回数据
             return self._process_extracted_data(
@@ -206,7 +206,15 @@ class ExtractDataWorker(QThread):
 
         load_dotenv()
         API_KEY = os.getenv("DASHSCOPE_API_KEY1")
-        corrector = TableCorrector(API_KEY)
+
+        # 创建状态回调函数
+        def status_callback(msg: str):
+            try:
+                self.status_updated.emit(msg)
+            except Exception as e:
+                print(f"状态更新失败: {e}")
+
+        corrector = TableCorrector(API_KEY, status_callback=status_callback)
         result = corrector.process_directory(OUTPUT_DIR)
         info_dict = result.get("info_dict", {})
 
