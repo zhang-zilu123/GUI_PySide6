@@ -73,27 +73,6 @@ class ExtractDataWorker(QThread):
                     ]
                     filename_str = ", ".join(filename_list)
                     print(f"开始解析PDF文件: {pdf_files}")
-                    object_keys = []
-                    # TODO: 真实上传
-                    for file_path in pdf_files:
-                        try:
-                            pdf_basename = os.path.splitext(
-                                os.path.basename(file_path)
-                            )[0]
-                            original_file_path = self.original_file_mapping.get(
-                                pdf_basename, file_path
-                            )
-                            object_key = 1
-                            # object_key = up_local_file(original_file_path)
-                            object_keys.append(object_key)
-                            logger.info(
-                                f"上传原始文件到OSS: {original_file_path} -> {object_key}"
-                            )
-                        except Exception as upload_error:
-                            error_msg = f"上传文件 {os.path.basename(original_file_path)} 到OSS失败: {str(upload_error)}"
-                            logger.error(error_msg)
-                            self.finished.emit("", [], False, error_msg)
-                            return
                     data = self.extract_data_from_pdf(pdf_files)
                     self.finished.emit(filename_str, data, True, "")
                 else:
@@ -105,19 +84,6 @@ class ExtractDataWorker(QThread):
                 ]
                 filename_str = ", ".join(filename_list)
                 print(f"开始解析PDF文件: {self.file_paths}")
-                object_keys = []
-                # TODO: 真实上传
-                for file_path in self.file_paths:
-                    try:
-                        object_key = 1
-                        # object_key = up_local_file(file_path)
-                        object_keys.append(object_key)
-                        logger.info(f"上传文件到OSS: {file_path} -> {object_key}")
-                    except Exception as upload_error:
-                        error_msg = f"上传文件 {os.path.basename(file_path)} 到OSS失败: {str(upload_error)}"
-                        logger.error(error_msg)
-                        self.finished.emit("", [], False, error_msg)
-                        return
                 data = self.extract_data_from_pdf(self.file_paths)
                 self.finished.emit(filename_str, data, True, "")
         except Exception as e:

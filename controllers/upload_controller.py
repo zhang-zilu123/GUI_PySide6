@@ -524,18 +524,26 @@ class UploadController(QObject):
         self.view.title.setText("正在提取识别中，请稍候...")
         self.view.title.setStyleSheet("color: red; font-weight: bold; font-size: 20px;")
 
+        logger.info("开始上传文件到OSS")
         for file in self.uploaded_files:
             file_extension = Path(file).suffix.lower()
             if file_extension in [".pdf"]:
-                up_local_file(local_file_path=file, object_prefix='chatbot_25_0528/muai-models/cost_ident/pdf_file')
+                res = up_local_file(local_file_path=file,
+                                    object_prefix='chatbot_25_0528/muai-models/cost_ident/pdf_file')
             elif file_extension in [".doc", ".docx", ".rtf"]:
-                up_local_file(local_file_path=file, object_prefix='chatbot_25_0528/muai-models/cost_ident/doc_file')
+                res = up_local_file(local_file_path=file,
+                                    object_prefix='chatbot_25_0528/muai-models/cost_ident/doc_file')
             elif file_extension in [".xls", ".xlsx"]:
-                up_local_file(local_file_path=file, object_prefix='chatbot_25_0528/muai-models/cost_ident/excel_file')
+                res = up_local_file(local_file_path=file,
+                                    object_prefix='chatbot_25_0528/muai-models/cost_ident/excel_file')
             elif file_extension in [".jpg", ".jpeg", ".png", ".bmp"]:
-                up_local_file(local_file_path=file, object_prefix='chatbot_25_0528/muai-models/cost_ident/image_file')
+                res = up_local_file(local_file_path=file,
+                                    object_prefix='chatbot_25_0528/muai-models/cost_ident/image_file')
             else:
-                up_local_file(local_file_path=file, object_prefix='chatbot_25_0528/muai-models/cost_ident/other_file')
+                res = up_local_file(local_file_path=file,
+                                    object_prefix='chatbot_25_0528/muai-models/cost_ident/other_file')
+            logger.info(f'上传文件 {file} 成功，OSS对象键: {res}')
+        logger.info(f'所有文件上传完成，共上传 {len(self.uploaded_files)} 个文件')
 
         if self._has_document_files(self.uploaded_files):
             # 更新状态提示
@@ -616,7 +624,7 @@ class UploadController(QObject):
                 self._handle_extraction_error(error_msg)
         else:
             # 转换失败
-            print(f"文档转换失败: {error_msg}")
+            error_logger.error(f'文档转换失败: {error_msg}')
             self._handle_extraction_error(error_msg)
 
     def _on_worker_finished(self, filename_str, data, success, error_msg):
@@ -792,10 +800,8 @@ class UploadController(QObject):
         if converted_dir.exists():
             try:
                 shutil.rmtree(str(converted_dir))
-                print("清理转换文件夹成功")
             except Exception as e:
                 print(f"清理转换文件夹失败: {str(e)}")
-                logger.error(f"清理转换文件夹失败: {str(e)}")
 
     def _show_processing_error(self, error_msg: str, title: str = "处理错误"):
         """显示处理错误对话框
