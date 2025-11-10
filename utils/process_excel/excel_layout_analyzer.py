@@ -21,6 +21,4 @@ def detect_excel_layout(file_path: str) -> dict:
     return response.get("output").choices[0].get("message").get("content")[0].get("text")
 
 if __name__ == "__main__":
-    file_path = "../output_images/布局2_主表+子表布局.png"
-    res = detect_excel_layout(file_path)
-    print(res)
+    print('测试 Excel 布局检测')

@@ -1,45 +1,19 @@
-import xlrd
-import openpyxl
 import excel2img
+import xlwings as xw
 
-from openpyxl import Workbook
-
-# 将.xls文件转换为.xlsx格式
+# 使用xlwings将.xls文件转换为.xlsx格式
 def convert_xls_to_xlsx(input_file, output_file):
-    """
-    将.xls文件转换为.xlsx格式。
-
-    参数：
-        input_file (str): .xls文件的路径。
-        output_file (str): 保存转换后.xlsx文件的路径。
-
-    返回：
-        None
-    """
-    # 打开.xls文件
-    workbook_xls = xlrd.open_workbook(input_file)
-    workbook_xlsx = Workbook()
-
-    for sheet_index in range(workbook_xls.nsheets):
-        sheet_xls = workbook_xls.sheet_by_index(sheet_index)
-        sheet_xlsx = workbook_xlsx.create_sheet(title=sheet_xls.name)
-
-        for row_idx in range(sheet_xls.nrows):
-            row_values = sheet_xls.row_values(row_idx)
-            sheet_xlsx.append(row_values)
-
-    # 删除openpyxl创建的默认工作表
-    if "Sheet" in workbook_xlsx.sheetnames:
-        del workbook_xlsx["Sheet"]
-
-    # 保存新的.xlsx文件
-    workbook_xlsx.save(output_file)
-    print(f"已将 '{input_file}' 转换为 '{output_file}'")
+    app = xw.App(visible=False)
+    wb = app.books.open(input_file)
+    wb.save(output_file)
+    wb.close()
+    app.kill()
 
 # 将Excel文件拆分为多个工作表
 def split_excel_sheets(input_file, output_dir):
     """
     将一个Excel文件拆分为多个工作表，并将每个工作表保存为一个新的Excel文件。
+    保留原始格式（字体、颜色、边框、列宽等）。
 
     参数：
         input_file (str): 输入Excel文件的路径。
@@ -50,37 +24,55 @@ def split_excel_sheets(input_file, output_dir):
     """
     import os
 
-    # 加载工作簿
-    try:
-        workbook = openpyxl.load_workbook(input_file)
-    except Exception as e:
-        print(f"加载工作簿时出错: {e}")
-        return
-
     # 确保输出目录存在
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
-    # 遍历工作簿中的每个工作表
-    for sheet_name in workbook.sheetnames:
-        sheet = workbook[sheet_name]
+    app = xw.App(visible=False)
+    try:
+        # 加载工作簿
+        wb = app.books.open(input_file)
 
-        # 为当前工作表创建一个新的工作簿
-        new_workbook = openpyxl.Workbook()
-        new_sheet = new_workbook.active
-        new_sheet.title = sheet_name
+        # 遍历工作簿中的每个工作表
+        for sheet in wb.sheets:
+            sheet_name = sheet.name
 
-        # 将原始工作表的数据复制到新工作表
-        for row in sheet.iter_rows(values_only=True):
-            new_sheet.append(row)
+            # 为当前工作表创建一个新的工作簿
+            new_wb = app.books.add()
+            new_sheet = new_wb.sheets[0]
+            new_sheet.name = sheet_name
 
-        # 保存新的工作簿
-        output_file = os.path.join(output_dir, f"{sheet_name}.xlsx")
-        try:
-            new_workbook.save(output_file)
-            print(f"已将工作表 '{sheet_name}' 保存到 '{output_file}'")
-        except Exception as e:
-            print(f"保存工作表 '{sheet_name}' 时出错: {e}")
+            # 复制整个工作表（包括格式）
+            used_range = sheet.used_range
+            if used_range.value:
+                # 复制单元格内容和格式
+                used_range.copy(new_sheet.range("A1"))
+                
+                # 复制列宽
+                for col_idx in range(1, used_range.columns.count + 1):
+                    col_letter = xw.utils.col_name(col_idx)
+                    original_width = sheet.range(f"{col_letter}:{col_letter}").column_width
+                    new_sheet.range(f"{col_letter}:{col_letter}").column_width = original_width
+                
+                # 复制行高
+                for row_idx in range(1, used_range.rows.count + 1):
+                    original_height = sheet.range(f"{row_idx}:{row_idx}").row_height
+                    new_sheet.range(f"{row_idx}:{row_idx}").row_height = original_height
+
+            # 保存新的工作簿
+            output_file = os.path.join(output_dir, f"{sheet_name}.xlsx")
+            try:
+                new_wb.save(output_file)
+                new_wb.close()
+                print(f"已将工作表 '{sheet_name}' 保存到 '{output_file}'（已保留格式）")
+            except Exception as e:
+                print(f"保存工作表 '{sheet_name}' 时出错: {e}")
+
+        wb.close()
+    except Exception as e:
+        print(f"加载工作簿时出错: {e}")
+    finally:
+        app.kill()
 
 # 将Excel文件转换为图片
 def convert_excel_to_images(file_paths, output_dir):
@@ -115,21 +107,4 @@ def convert_excel_to_images(file_paths, output_dir):
                 print(f"转换 '{input_file}' 时出错: {e}")
 
 if __name__ == "__main__":
-    # 示例用法
-    input_file = "../布局1_扁平式布局.xls"  # 替换为你的输入文件路径
-    # output_dir = "output_sheets"  # 替换为你想要的输出目录
-    # convert_xls_to_xlsx(input_file, "output.xlsx")
-    # input_file = "./output.xlsx"
-    # split_excel_sheets(input_file, output_dir)
-    input_files = [
-        "./布局2_主表+子表布局.xls",
-        "./布局3_分块布局.xls",
-    ]
-    convert_xls_to_xlsx(input_files[0], "../布局2_主表+子表布局.xlsx")
-    convert_xls_to_xlsx(input_files[1], "../布局3_分块布局.xlsx")
-    input_files = [
-        "./布局2_主表+子表布局.xlsx",
-        "./布局3_分块布局.xlsx",
-    ]
-    output_dir = "../output_images"  # 替换为你想要的输出目录
-    convert_excel_to_images(input_files, output_dir)
+    print('Excel处理工具模块已加载')

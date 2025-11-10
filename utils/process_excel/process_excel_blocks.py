@@ -1,12 +1,10 @@
 import os
 
-import openpyxl
 import excel2img
 from dashscope import MultiModalConversation
 
 from config.config import EXCEL_TABLE_EXTRACTION_PROMPT
 from dotenv import load_dotenv
-from openpyxl.styles import Border, Side
 
 load_dotenv()
 
@@ -22,39 +20,37 @@ def format_excel_and_convert_to_image(file_path, output_image_path):
     返回：
         None
     """
-    # 定义边框样式
-    thin_border = Border(
-        left=Side(style="thin"),
-        right=Side(style="thin"),
-        top=Side(style="thin"),
-        bottom=Side(style="thin"),
-    )
-
+    import xlwings as xw
+    
+    app = xw.App(visible=False)
     try:
         # 加载工作簿
-        workbook = openpyxl.load_workbook(file_path)
+        wb = app.books.open(file_path)
 
-        for sheet in workbook.worksheets:
+        for sheet in wb.sheets:
+            # 获取使用范围
+            used_range = sheet.used_range
+            
             # 调整列宽
-            for col in sheet.columns:
+            for col_idx in range(1, used_range.columns.count + 1):
+                col_letter = xw.utils.col_name(col_idx)
+                col_range = sheet.range(f"{col_letter}:{col_letter}")
                 max_length = 0
-                col_letter = col[0].column_letter  # 获取列字母
-                for cell in col:
-                    try:
-                        if cell.value:
-                            max_length = max(max_length, len(str(cell.value)))
-                    except:
-                        pass
+                
+                for cell in col_range[:used_range.rows.count]:
+                    if cell.value:
+                        max_length = max(max_length, len(str(cell.value)))
+                
                 adjusted_width = (max_length + 2) * 1.2  # 调整宽度
-                sheet.column_dimensions[col_letter].width = adjusted_width
+                sheet.range(f"{col_letter}:{col_letter}").column_width = adjusted_width
 
-            # 添加边框
-            for row in sheet.iter_rows():
-                for cell in row:
-                    cell.border = thin_border
+            # xlwings 添加边框需要通过 API 对象
+            # 为整个使用范围添加边框
+            used_range.api.Borders.LineStyle = 1  # 1 表示实线边框
 
         # 保存格式化后的工作簿
-        workbook.save(file_path)
+        wb.save(file_path)
+        wb.close()
         print(f"已格式化: {file_path}")
 
         # 转换为图片
@@ -69,6 +65,8 @@ def format_excel_and_convert_to_image(file_path, output_image_path):
             print(f"警告信息: {e}")
         else:
             raise e  # 如果图片未生成，则重新抛出异常
+    finally:
+        app.quit()
 
 # 提取图片的数据输出markdown
 def extract_excel_data_to_markdown(file_path):
@@ -87,9 +85,4 @@ def extract_excel_data_to_markdown(file_path):
     return response.get("output").choices[0].get("message").get("content")[0].get("text")
 
 if __name__ == "__main__":
-    # 示例用法
-    file_path = "./3、分块布局.xlsx"  # 替换为你的Excel文件路径
-    output_image_path = "example.png"  # 替换为你的输出图片路径
-    format_excel_and_convert_to_image(file_path, output_image_path)
-    # res = extract_excel_data_to_markdown("./example.png")
-    # print(res)
+    print('测试 Excel 格式化和数据提取')

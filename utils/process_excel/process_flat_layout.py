@@ -1,44 +1,41 @@
 import json
-
-import openpyxl
 import os
 import dashscope
+import xlwings as xw
 from dashscope import Generation
 from dotenv import load_dotenv
-from openpyxl.styles import Border, Side
 
 from config.config import HEADER_ROW_DETECTION_PROMPT
-from utils.process_excel.excel_process import convert_excel_to_images
 
 load_dotenv()
 
 dashscope.base_http_api_url = "https://dashscope.aliyuncs.com/api/v1"
 
-# 读取Excel文件的前20行数据
 def read_excel_first_20_rows(file_path):
     """
-    读取Excel文件的前15行数据。
-
-    参数：
-        file_path (str): Excel文件的路径。
-
-    返回：
-        list: 包含前20行数据的列表，每行是一个包含单元格值的列表。
+    使用 xlwings 读取 Excel 文件的前 20 行数据。
     """
     data = []
-
+    app = xw.App(visible=False)
     try:
-        # 加载工作簿
-        workbook = openpyxl.load_workbook(file_path)
-        # 获取第一个工作表
-        sheet = workbook.active
-
-        # 遍历前20行
-        for row in sheet.iter_rows(min_row=1, max_row=15, values_only=True):
-            data.append(list(row))
-
+        wb = app.books.open(file_path)
+        sheet = wb.sheets[0]
+        # 获取实际使用的区域
+        used_range = sheet.used_range
+        total_rows = used_range.rows.count
+        total_cols = used_range.columns.count
+        # 只取前 20 行
+        read_rows = min(20, total_rows)
+        # 构造正确的范围字符串
+        last_col_letter = xw.utils.col_name(total_cols)
+        cell_range = f"A1:{last_col_letter}{read_rows}"
+        # 一次性读取数据（比逐行快很多）
+        data = sheet.range(cell_range).value
+        wb.close()
     except Exception as e:
-        print(f"读取Excel文件时出错: {e}")
+        print(f"读取 Excel 文件时出错: {e}")
+    finally:
+        app.quit()
 
     return data
 
@@ -64,6 +61,7 @@ def split_excel_by_rows_with_header(
 ):
     """
     将Excel表格按行切分，每10行切分成一个新的Excel文件，且保留从第1行到表头索引行的所有数据。
+    保留原始格式（字体、颜色、边框、列宽、行高等）。
 
     参数：
         file_path (str): 输入Excel文件的路径。
@@ -74,52 +72,79 @@ def split_excel_by_rows_with_header(
     返回：
         None
     """
-    import os
-    import openpyxl
-
     # 确保输出目录存在
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
+    app = xw.App(visible=False)
     try:
         # 加载工作簿
-        workbook = openpyxl.load_workbook(file_path)
-        sheet = workbook.active
-
-        # 获取总行数
-        total_rows = sheet.max_row
-
+        wb = app.books.open(file_path)
+        sheet = wb.sheets[0]
+        # 获取总行数和列数
+        total_rows = sheet.used_range.rows.count
+        total_cols = sheet.used_range.columns.count
+        last_col_letter = xw.utils.col_name(total_cols)
+        
         # 按行切分表格
         for start_row in range(header_index + 1, total_rows + 1, rows_per_file):
             # 创建新的工作簿
-            new_workbook = openpyxl.Workbook()
-            new_sheet = new_workbook.active
-            new_sheet.title = sheet.title
+            new_wb = app.books.add()
+            new_sheet = new_wb.sheets[0]
+            new_sheet.name = sheet.name
 
-            # 复制从第1行到表头索引行的数据
-            for row in sheet.iter_rows(
-                    min_row=1, max_row=header_index, values_only=True
-            ):
-                new_sheet.append(row)
+            # 复制从第1行到表头索引行的数据（包括格式）
+            header_range = sheet.range(f"A1:{last_col_letter}{header_index}")
+            header_range.copy(new_sheet.range("A1"))
+            
+            # 删除表头区域的批注
+            try:
+                new_sheet.range(f"A1:{last_col_letter}{header_index}").api.ClearComments()
+            except:
+                pass  # 如果没有批注，忽略错误
 
-            # 复制当前分块的数据
-            for row in sheet.iter_rows(
-                    min_row=start_row,
-                    max_row=min(start_row + rows_per_file - 1, total_rows),
-                    values_only=True,
-            ):
-                new_sheet.append(row)
+            # 复制当前分块的数据（包括格式）
+            end_row = min(start_row + rows_per_file - 1, total_rows)
+            data_range = sheet.range(f"A{start_row}:{last_col_letter}{end_row}")
+            data_range.copy(new_sheet.range(f"A{header_index + 1}"))
+            
+            # 删除数据区域的批注
+            try:
+                new_sheet.range(f"A{header_index + 1}:{last_col_letter}{header_index + (end_row - start_row + 1)}").api.ClearComments()
+            except:
+                pass  # 如果没有批注，忽略错误
+
+            # 复制列宽
+            for col_idx in range(1, total_cols + 1):
+                col_letter = xw.utils.col_name(col_idx)
+                original_width = sheet.range(f"{col_letter}:{col_letter}").column_width
+                new_sheet.range(f"{col_letter}:{col_letter}").column_width = original_width
+
+            # 复制表头行的行高
+            for row_idx in range(1, header_index + 1):
+                original_height = sheet.range(f"{row_idx}:{row_idx}").row_height
+                new_sheet.range(f"{row_idx}:{row_idx}").row_height = original_height
+
+            # 复制数据行的行高
+            for row_idx in range(start_row, end_row + 1):
+                original_height = sheet.range(f"{row_idx}:{row_idx}").row_height
+                new_row_idx = row_idx - start_row + header_index + 1
+                new_sheet.range(f"{new_row_idx}:{new_row_idx}").row_height = original_height
 
             # 保存新的工作簿
             output_file = os.path.join(
                 output_dir,
-                f"{sheet.title}_rows_{start_row}_to_{min(start_row + rows_per_file - 1, total_rows)}.xlsx",
+                f"{sheet.name}_rows_{start_row}_to_{end_row}.xlsx",
             )
-            new_workbook.save(output_file)
-            print(f"已保存: {output_file}")
-
+            new_wb.save(output_file)
+            new_wb.close()
+            print(f"已保存: {output_file}（已保留格式）")
+        
+        wb.close()
     except Exception as e:
         print(f"切分Excel文件时出错: {e}")
+    finally:
+        app.quit()
 
 # 格式化目录下所有Excel文件
 def format_excel_files_in_directory(directory):
@@ -133,61 +158,51 @@ def format_excel_files_in_directory(directory):
         None
     """
     import os
-    import openpyxl
-
-    # 定义边框样式
-    thin_border = Border(
-        left=Side(style="thin"),
-        right=Side(style="thin"),
-        top=Side(style="thin"),
-        bottom=Side(style="thin"),
-    )
 
     # 遍历目录中的所有Excel文件
     file_paths = []
-    for file_name in os.listdir(directory):
-        if file_name.endswith(".xlsx"):
-            file_path = os.path.join(directory, file_name)
+    app = xw.App(visible=False)
+    try:
+        for file_name in os.listdir(directory):
+            if file_name.endswith(".xlsx"):
+                file_path = os.path.join(directory, file_name)
 
-            try:
-                # 加载工作簿
-                workbook = openpyxl.load_workbook(file_path)
+                try:
+                    # 加载工作簿
+                    wb = app.books.open(file_path)
 
-                for sheet in workbook.worksheets:
-                    # 调整列宽
-                    for col in sheet.columns:
-                        max_length = 0
-                        col_letter = col[0].column_letter  # 获取列字母
-                        for cell in col:
-                            try:
+                    for sheet in wb.sheets:
+                        # 获取使用范围
+                        used_range = sheet.used_range
+
+                        # 调整列宽
+                        for col_idx in range(1, used_range.columns.count + 1):
+                            col_letter = xw.utils.col_name(col_idx)
+                            col_range = sheet.range(f"{col_letter}:{col_letter}")
+                            max_length = 0
+
+                            for cell in col_range[:used_range.rows.count]:
                                 if cell.value:
                                     max_length = max(max_length, len(str(cell.value)))
-                            except:
-                                pass
-                        adjusted_width = (max_length + 2) * 1.2  # 调整宽度
-                        sheet.column_dimensions[col_letter].width = adjusted_width
 
-                    # 添加边框
-                    for row in sheet.iter_rows():
-                        for cell in row:
-                            cell.border = thin_border
+                            adjusted_width = (max_length + 2) * 1.2  # 调整宽度
+                            sheet.range(f"{col_letter}:{col_letter}").column_width = adjusted_width
 
-                # 保存修改
-                workbook.save(file_path)
-                file_paths.append(file_path)
-                print(f"已格式化: {file_path}")
-            except Exception as e:
-                print(f"格式化文件时出错: {file_path}, 错误: {e}")
+                        # xlwings 添加边框需要通过 API 对象
+                        # 为整个使用范围添加边框
+                        used_range.api.Borders.LineStyle = 1  # 1 表示实线边框
+
+                    # 保存修改
+                    wb.save(file_path)
+                    wb.close()
+                    file_paths.append(file_path)
+                    print(f"已格式化: {file_path}")
+                except Exception as e:
+                    print(f"格式化文件时出错: {file_path}, 错误: {e}")
+    finally:
+        app.quit()
+
     return file_paths
 
 if __name__ == "__main__":
-    # 示例用法
-    file_path = "../../converted_files/excel_work_布局1_扁平式布局/split_sheets/Sheet1 (2).xlsx"  # 替换为你的Excel文件路径
-    rows = read_excel_first_20_rows(file_path)
-    header_index = int(determine_header_index(rows))  # 获取表头索引
-    print(f"表头索引: {header_index}")
-    # output_dir = "output_excel"  # 替换为你的输出目录
-    # split_excel_by_rows_with_header(file_path, output_dir, header_index + 1)
-    # directory = "output_excel"  # 替换为你的目录路径
-    # file_paths = format_excel_files_in_directory(directory)
-    # convert_excel_to_images(file_paths, "output_images")
+    print('测试 Excel 平铺布局处理工具模块')
