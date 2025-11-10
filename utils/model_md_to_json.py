@@ -181,19 +181,13 @@ def _build_extraction_prompt(content: str) -> str:
 - 若同一文本中出现多个币种，确保每条记录的货币代码与金额匹配。
 
 # 示例1
-输入 Markdown：
-    ```
-    # 汕头市协运船务有限公司
-    # 收款对账通知单
-    工作单号: SEAE25090135
-    费用明细：
-    <table>
-    <tr><td>费用名称</td><td>RMB</td><td>USD</td></tr>
-    <tr><td>1.订舱费</td><td>350.00</td><td></td></tr>
-    <tr><td>2.海运费</td><td></td><td>3360.00</td></tr>
-    <tr><td>3.拖车费</td><td>1600.00</td><td></td></tr>
-    </table>
-    ```
+输入示例（Markdown 片段）：
+{{
+# 费 用 单
+<table><tr><td>项目</td><td colspan="2">单价</td><td>数量</td><td colspan="2">合计</td></tr><tr><td></td><td>RMB</td><td>USD</td><td></td><td>RMB</td><td>USD</td></tr><tr><td>1.海运费 ($)</td><td></td><td></td><td></td><td></td><td></td></tr><tr><td>2.场站费 (￥)</td><td>400</td><td></td><td>2</td><td>￥800</td><td></td></tr><tr><td>3.港杂费 (￥)</td><td>373</td><td></td><td>2</td><td>￥746</td><td></td></tr><tr><td>4.单证费 (￥)</td><td>430</td><td></td><td>1</td><td>￥430</td><td></td></tr><tr><td>5. THC (￥)</td><td>990</td><td></td><td>2</td><td>￥1,980</td><td></td></tr><tr><td>6.舱单费 (￥)</td><td>150</td><td></td><td>1</td><td>￥150</td><td></td></tr><tr><td>7.QTS (￥)</td><td>500</td><td></td><td>2</td><td>￥1,000</td><td></td></tr><tr><td>8.AFR (￥)</td><td>225</td><td></td><td>1</td><td>￥225</td><td></td></tr><tr><td>10.代理费 (￥)</td><td>200</td><td></td><td>1</td><td>￥200</td><td></td></tr><tr><td>11.VGM (￥)</td><td>100</td><td></td><td>2</td><td>￥200</td><td></td></tr><tr><td>VGM 411漏收</td><td>100</td><td></td><td>1</td><td>￥100</td><td></td></tr><tr><td>合计</td><td colspan="2"></td><td></td><td>￥5,831.00</td><td>$0.0</td></tr></table>
+如无回传视为默认  
+<table><tr><td>帐户：</td><td></td></tr><tr><td>公司名称：</td><td>青岛林沃供应链管理有限公司</td></tr><tr><td>人民币开户行：</td><td>中国工商银行股份有限公司青岛奥帆支行</td></tr><tr><td>人民币账户：</td><td>3803021109200228547</td></tr><tr><td>美元开户行：</td><td>中国工商银行股份有限公司青岛奥帆支行</td></tr><tr><td>美元账户：</td><td>3803021119200216246</td></tr></table>
+}}
 
 输出示例（JSON）(仅显示前三个)：
 
@@ -201,27 +195,27 @@ def _build_extraction_prompt(content: str) -> str:
 {
 [
 {
-    "外销合同": "SEAE25090135",
-    "船代公司": "汕头市协运船务有限公司",
-    "费用名称": "订舱费",
-    "货币代码": "CNY",
-    "金额": "350.00",
-    "备注": ""
-},
-{
-    "外销合同": "SEAE25090135",
-    "船代公司": "汕头市协运船务有限公司",
+    "外销合同": "DJSCTAO250000746",
+    "船代公司": "青岛林沃供应链管理有限公司",
     "费用名称": "海运费",
-    "货币代码": "USD",
-    "金额": "3360.00",
+    "货币代码": "CNY",
+    "金额": "0.00",
     "备注": ""
 },
 {
-    "外销合同": "SEAE25090135",
-    "船代公司": "汕头市协运船务有限公司",
-    "费用名称": "拖车费",
+    "外销合同": "DJSCTAO250000746",
+    "船代公司": "青岛林沃供应链管理有限公司",
+    "费用名称": "场站费",
     "货币代码": "CNY",
-    "金额": "1600.00",
+    "金额": "800.00",
+    "备注": ""
+},
+{
+    "外销合同": "DJSCTAO250000746",
+    "船代公司": "青岛林沃供应链管理有限公司",
+    "费用名称": "港杂费",
+    "货币代码": "CNY",
+    "金额": "746.00",
     "备注": ""
 }
 ]
