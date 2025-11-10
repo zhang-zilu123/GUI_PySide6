@@ -236,7 +236,7 @@ class MainWindow(QMainWindow):
         reply = QMessageBox.question(
             self,
             "退出确认",
-            "确定要退出吗？",
+            "确定要退出吗？退出前请确保已保存所有数据。",
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No,
         )
