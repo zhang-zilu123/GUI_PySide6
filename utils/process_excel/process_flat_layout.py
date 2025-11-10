@@ -11,6 +11,7 @@ load_dotenv()
 
 dashscope.base_http_api_url = "https://dashscope.aliyuncs.com/api/v1"
 
+# 使用 xlwings 读取 Excel 文件的前 20 行数据
 def read_excel_first_20_rows(file_path):
     """
     使用 xlwings 读取 Excel 文件的前 20 行数据。
@@ -38,22 +39,6 @@ def read_excel_first_20_rows(file_path):
         app.quit()
 
     return data
-
-# 判断读取前20行数据的表头索引
-def determine_header_index(rows):
-    rows_str = json.dumps(rows, ensure_ascii=False)
-    messages = [
-        {"role": "system", "content": HEADER_ROW_DETECTION_PROMPT},
-        {"role": "user", "content": rows_str},
-    ]
-    response = Generation.call(
-        api_key=os.getenv("DASHSCOPE_API_KEY2"),
-        model="qwen3-max",
-        messages=messages,
-        result_format="message",
-        enable_thinking=False,
-    )
-    return response.get("output").choices[0].get("message").get("content")
 
 # 按行切分Excel
 def split_excel_by_rows_with_header(
@@ -85,7 +70,7 @@ def split_excel_by_rows_with_header(
         total_rows = sheet.used_range.rows.count
         total_cols = sheet.used_range.columns.count
         last_col_letter = xw.utils.col_name(total_cols)
-        
+
         # 按行切分表格
         for start_row in range(header_index + 1, total_rows + 1, rows_per_file):
             # 创建新的工作簿
@@ -96,7 +81,7 @@ def split_excel_by_rows_with_header(
             # 复制从第1行到表头索引行的数据（包括格式）
             header_range = sheet.range(f"A1:{last_col_letter}{header_index}")
             header_range.copy(new_sheet.range("A1"))
-            
+
             # 删除表头区域的批注
             try:
                 new_sheet.range(f"A1:{last_col_letter}{header_index}").api.ClearComments()
@@ -107,10 +92,11 @@ def split_excel_by_rows_with_header(
             end_row = min(start_row + rows_per_file - 1, total_rows)
             data_range = sheet.range(f"A{start_row}:{last_col_letter}{end_row}")
             data_range.copy(new_sheet.range(f"A{header_index + 1}"))
-            
+
             # 删除数据区域的批注
             try:
-                new_sheet.range(f"A{header_index + 1}:{last_col_letter}{header_index + (end_row - start_row + 1)}").api.ClearComments()
+                new_sheet.range(
+                    f"A{header_index + 1}:{last_col_letter}{header_index + (end_row - start_row + 1)}").api.ClearComments()
             except:
                 pass  # 如果没有批注，忽略错误
 
@@ -139,7 +125,7 @@ def split_excel_by_rows_with_header(
             new_wb.save(output_file)
             new_wb.close()
             print(f"已保存: {output_file}（已保留格式）")
-        
+
         wb.close()
     except Exception as e:
         print(f"切分Excel文件时出错: {e}")
@@ -206,3 +192,5 @@ def format_excel_files_in_directory(directory):
 
 if __name__ == "__main__":
     print('测试 Excel 平铺布局处理工具模块')
+    rows = read_excel_first_20_rows('./1、扁平布局.xls')
+    print(rows)
