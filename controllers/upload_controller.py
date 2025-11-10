@@ -5,6 +5,7 @@
 
 import os
 import shutil
+from pathlib import Path
 
 from typing import List, Dict
 from PySide6.QtWidgets import QFileDialog, QMessageBox, QHBoxLayout, QPushButton
@@ -13,11 +14,11 @@ from PySide6.QtCore import QObject, Signal, QThread, Qt
 from controllers.extract_data_controller import ExtractDataWorker
 from utils.logger import get_upload_logger, get_error_logger
 from controllers.file_conversion_controller import DocumentConversionWorker
+from utils.upload_file_to_oss import up_local_file
 
 # 使用统一的日志系统
 logger = get_upload_logger()
 error_logger = get_error_logger()
-
 
 class UploadController(QObject):
     """上传功能控制器
@@ -208,8 +209,8 @@ class UploadController(QObject):
             已上传的文件名列表
         """
         if (
-            not hasattr(self.data_manager, "uploaded_file_name")
-            or not self.data_manager.uploaded_file_name
+                not hasattr(self.data_manager, "uploaded_file_name")
+                or not self.data_manager.uploaded_file_name
         ):
             return []
         if isinstance(self.data_manager.uploaded_file_name, str):
@@ -240,7 +241,7 @@ class UploadController(QObject):
         )
 
     def _handle_file_validation_results(
-        self, valid_files: List[str], invalid_files: List[str], total_count: int = 0
+            self, valid_files: List[str], invalid_files: List[str], total_count: int = 0
     ) -> None:
         """处理文件验证结果
 
@@ -257,7 +258,7 @@ class UploadController(QObject):
             self._add_files_to_list(valid_files)
 
     def _show_invalid_files_message(
-        self, invalid_files: List[str], valid_count: int = 0, total_count: int = 0
+            self, invalid_files: List[str], valid_count: int = 0, total_count: int = 0
     ) -> None:
         """显示无效文件消息
 
@@ -523,7 +524,19 @@ class UploadController(QObject):
         self.view.title.setText("正在提取识别中，请稍候...")
         self.view.title.setStyleSheet("color: red; font-weight: bold; font-size: 20px;")
 
-        # 检查是否需要文档转换
+        for file in self.uploaded_files:
+            file_extension = Path(file).suffix.lower()
+            if file_extension in [".pdf"]:
+                up_local_file(local_file_path=file, object_prefix='chatbot_25_0528/muai-models/cost_ident/pdf_file')
+            elif file_extension in [".doc", ".docx", ".rtf"]:
+                up_local_file(local_file_path=file, object_prefix='chatbot_25_0528/muai-models/cost_ident/doc_file')
+            elif file_extension in [".xls", ".xlsx"]:
+                up_local_file(local_file_path=file, object_prefix='chatbot_25_0528/muai-models/cost_ident/excel_file')
+            elif file_extension in [".jpg", ".jpeg", ".png", ".bmp"]:
+                up_local_file(local_file_path=file, object_prefix='chatbot_25_0528/muai-models/cost_ident/image_file')
+            else:
+                up_local_file(local_file_path=file, object_prefix='chatbot_25_0528/muai-models/cost_ident/other_file')
+
         if self._has_document_files(self.uploaded_files):
             # 更新状态提示
             self.view.title.setText("正在转换文件格式，请稍候...")
@@ -558,7 +571,7 @@ class UploadController(QObject):
         self.current_workers.append(conversion_worker)
 
     def _on_conversion_finished(
-        self, converted_files, file_mapping, success, error_msg, excel_result=None
+            self, converted_files, file_mapping, success, error_msg, excel_result=None
     ):
         """处理转换完成事件"""
         self._cleanup_worker()

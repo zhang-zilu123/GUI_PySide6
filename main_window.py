@@ -119,9 +119,9 @@ class MainWindow(QMainWindow):
                         self.data_manager.set_file_name(filename_str)
                         self.edit_controller.update_filename(filename_str)
                         self.data_manager.set_current_data(data)
-                        self.preview_controller.set_data(data)
+                        self.preview_controller.set_data()
                         self.preview_view.upfile_button.setVisible(True)
-                        self.edit_controller.set_data(data)
+                        self.edit_controller.set_data()
                         self.tab_widget.setCurrentWidget(self.preview_view)
 
                 except json.JSONDecodeError:
