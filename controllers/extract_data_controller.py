@@ -94,7 +94,7 @@ class ExtractDataWorker(QThread):
                             logger.error(error_msg)
                             self.finished.emit("", [], False, error_msg)
                             return
-                    data = self._extract_data_from_pdf(pdf_files)
+                    data = self.extract_data_from_pdf(pdf_files)
                     self.finished.emit(filename_str, data, True, "")
                 else:
                     self.finished.emit("", [], False, "未找到PDF文件进行处理")
@@ -118,7 +118,7 @@ class ExtractDataWorker(QThread):
                         logger.error(error_msg)
                         self.finished.emit("", [], False, error_msg)
                         return
-                data = self._extract_data_from_pdf(self.file_paths)
+                data = self.extract_data_from_pdf(self.file_paths)
                 self.finished.emit(filename_str, data, True, "")
         except Exception as e:
             error_msg = f"处理文件时出错: {str(e)}"

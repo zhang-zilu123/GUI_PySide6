@@ -63,6 +63,12 @@ def format_excel_and_convert_to_image(file_path, output_image_path):
 
     except Exception as e:
         print(f"处理文件时出错: {file_path}, 错误: {e}")
+        # 检查图片是否实际生成
+        if os.path.exists(output_image_path):
+            print(f"图片已生成，但导出过程出现警告: {output_image_path}")
+            print(f"警告信息: {e}")
+        else:
+            raise e  # 如果图片未生成，则重新抛出异常
 
 # 提取图片的数据输出markdown
 def extract_excel_data_to_markdown(file_path):
@@ -82,8 +88,8 @@ def extract_excel_data_to_markdown(file_path):
 
 if __name__ == "__main__":
     # 示例用法
-    # file_path = "../布局3_分块布局.xlsx"  # 替换为你的Excel文件路径
-    # output_image_path = "example.png"  # 替换为你的输出图片路径
-    # format_excel_and_convert_to_image(file_path, output_image_path)
-    res = extract_excel_data_to_markdown("./example.png")
-    print(res)
+    file_path = "./3、分块布局.xlsx"  # 替换为你的Excel文件路径
+    output_image_path = "example.png"  # 替换为你的输出图片路径
+    format_excel_and_convert_to_image(file_path, output_image_path)
+    # res = extract_excel_data_to_markdown("./example.png")
+    # print(res)
