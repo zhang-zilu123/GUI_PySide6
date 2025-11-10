@@ -10,17 +10,17 @@ from typing import Dict, List, Any, Optional
 from urllib.parse import urlparse, parse_qs
 
 import requests
-from datetime import datetime
-from PySide6.QtCore import QObject, Signal, Qt, QUrl
+from PySide6.QtCore import QObject, Signal, QUrl
 from PySide6.QtWidgets import QVBoxLayout, QDialog, QMessageBox
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply
+from requests import Response
 
 from config.config import SUBMIT_FIELD
 from data.history_manager import HistoryManager
 from data.token_manager import token_manager
-from utils.logger import get_preview_logger, get_error_logger
-from utils.upload_file_to_oss import up_local_file
+from utils.common import count_outside_sales_contracts_in_data, count_export_contract_upload_results
+from utils.logger import get_preview_logger, get_error_logger, upload_all_logs
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -179,7 +179,7 @@ class LoginDialog(QDialog):
                 response = requests.get(api_url, headers=headers)
                 user_name = response.json()["user_name"]
                 logger.info(f"user_name:{user_name}")
-                logger.error(f'用户:{user_name}, 提交至OA数据库失败')
+                error_logger.error(f'用户:{user_name}, 提交至OA数据库失败')
                 self.accept()
             else:
                 raise ValueError(data.get("message", "登录失败"))
@@ -323,7 +323,7 @@ class PreviewController(QObject):
         except Exception as e:
             error_msg = f"上传操作失败: {str(e)}"
             QMessageBox.critical(self.view, "上传错误", error_msg)
-            logger.error(error_msg)
+            error_logger.error(error_msg)
         finally:
             # 恢复按钮状态
             self.view.upload_button.setEnabled(True)
@@ -415,10 +415,12 @@ class PreviewController(QObject):
         # 处理数据并上传
         processed_data = self._process_data(self.data)
         logger.info(f"上传的数据:{processed_data}")
-        upload_result = self._upload_to_server(processed_data)
+        logger.info(f"上传{count_outside_sales_contracts_in_data(processed_data)}个外销合同号")
+        logger.info(f"上传{len(processed_data)}条费用明细")
+        upload_response = self._upload_to_server(processed_data)
 
-        if upload_result is not None:
-            self._handle_upload_result(upload_result, processed_data)
+        if upload_response is not None:
+            self._handle_upload_result(upload_response, processed_data)
 
     def _cleanup_temp_files(self) -> None:
         """清理临时文件"""
@@ -427,7 +429,7 @@ class PreviewController(QObject):
 
     def _upload_to_server(
             self, processed_data: List[Dict[str, Any]]
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Response | None:
         """上传数据到服务器
 
         Args:
@@ -458,23 +460,31 @@ class PreviewController(QObject):
                 )
                 return None
             logger.info(f"上传接口响应: {result}")
-            return result
+            success_count, fail_count = count_export_contract_upload_results(result.get('message'))
+            logger.info(f"上传至OA成功数: {success_count}, 上传至OA失败数: {fail_count}")
+            return response
 
         except Exception as e:
             error_msg = f"上传请求失败: {str(e)}"
             QMessageBox.critical(self.view, "上传错误", f"{error_msg}\n\n请检查网络连接后重新尝试。")
+            error_logger.error(error_msg)
             return None
 
     def _handle_upload_result(
-            self, result: Dict[str, Any], processed_data: List[Dict[str, Any]]
+            self, response: Response, processed_data: List[Dict[str, Any]]
     ) -> None:
         """处理上传结果
 
         Args:
-            result: 上传结果
+            response: 上传响应
             processed_data: 处理后的数据
         """
+        result = response.json()
         error_list = result.get("error_list", [])
+        if response.status_code == 401:
+            QMessageBox.critical(self.view, "登录错误",
+                                 "登录认证已过期，请在编辑页面保存未上传的数据，并重新启动程序登录上传。")
+            return
 
         if result.get("code") == 200:
             if not error_list:
@@ -487,8 +497,8 @@ class PreviewController(QObject):
                 )
         else:
             QMessageBox.critical(
-                self.view, "错误", f"上传失败: {result.get('message')}"
-            )
+                self.view, "错误",
+                f"上传失败: {result.get('message') | result.get('msg')}")
             return
 
         # 处理结果数据
@@ -524,9 +534,7 @@ class PreviewController(QObject):
             for i, item in enumerate(save_data):
                 item["is_error"] = i in failed_indices
 
-            # TODO:真实上传
-            logger.error(f"上传失败的数据:{self.data}")
-
+            error_logger.error(f"上传失败的数据:{self.data}")
             print(f"上传失败的数据索引: {failed_indices}")
             print(f"保留的失败数据条数: {len(self.data)}, 详情: {self.data}")
         else:
@@ -535,6 +543,8 @@ class PreviewController(QObject):
                 item["is_error"] = False
             self.data = []
 
+        # TODO:真实上传
+        upload_all_logs()
         # 保存上传记录
         self._save_upload_record(save_data)
 
@@ -574,12 +584,10 @@ class PreviewController(QObject):
                 print("没有数据需要保存记录")
                 return
 
-            record_path = self.history_manager.save_upload_record(
+            self.history_manager.save_upload_record(
                 file_name=self.data_manager.file_name,
                 data=save_data,
             )
-            print(f"上传记录已保存: {record_path}")
-            logger.info(f"上传记录已保存: {record_path}")
         except Exception as e:
             error_msg = f"保存上传记录失败: {str(e)}"
             print(error_msg)
@@ -639,5 +647,4 @@ class PreviewController(QObject):
             }
             new_list.append(new_row)
 
-        print(f"处理后的数据: {new_list}")
         return new_list

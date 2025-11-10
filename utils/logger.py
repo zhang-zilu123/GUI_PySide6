@@ -211,20 +211,9 @@ def get_error_logger() -> logging.Logger:
     current_time = datetime.now().strftime("%Y%m%d-%H%M")
     log_file = f"{current_time}-错误日志.log"
     logger = LoggerManager.get_logger("error", log_file, level=logging.ERROR)
-
-    # 记录设备ID（仅第一次创建时）
-    if not hasattr(get_error_logger, "_device_logged"):
-        try:
-            with open("./device_id.txt", "r", encoding="utf-8") as f:
-                content = f.read().strip()
-                logger.error(f"device_id: {content}")
-            get_error_logger._device_logged = True
-        except Exception as e:
-            logger.error(f"无法读取 device_id: {e}")
-
     return logger
 
-def upload_all_logs() -> dict:
+def upload_all_logs() -> None:
     """上传所有日志文件到OSS
 
     上传以下日志文件：
@@ -253,7 +242,11 @@ def upload_all_logs() -> dict:
 
     for log_file in log_files:
         if os.path.exists(log_file):
-            up_local_file(log_file, object_prefix='chatbot_25_0528/muai-models/cost_ident/log')
+            # 检查文件大小，如果大于0KB才上传
+            if os.path.getsize(log_file) > 0:
+                up_local_file(log_file, object_prefix='chatbot_25_0528/muai-models/cost_ident/log')
+            else:
+                print(f"文件 {log_file} 大小为0KB，跳过上传")
 
 # ==================== 使用示例 ====================
 if __name__ == "__main__":

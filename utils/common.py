@@ -6,7 +6,7 @@ import os
 import colorsys
 import datetime
 import shutil
-from typing import List, Union, Optional, Dict
+from typing import List, Union, Optional, Dict, Tuple
 
 # 获取文件名列表
 def get_filename_list(file_path: Union[str, List[str]]) -> List[str]:
@@ -209,7 +209,39 @@ def add_timestamp_to_filename(file_path: str) -> str:
 def count_outside_sales_contracts(data: Dict) -> int:
     """计算多少个外销合同号"""
     res = set()
+    if not data:
+        return 0
     for item in data:
         if item.get("外销合同号"):
             res.add(item.get("外销合同号"))
     return len(res)
+
+# 计算提交数据中有多少个外销合同号
+def count_outside_sales_contracts_in_data(data: List[Dict]) -> int:
+    """计算提交数据中有多少个外销合同号"""
+    res = set()
+    if not data:
+        return 0
+    for item in data:  # type: Dict
+        if item.get('wxht'):
+            res.add(item.get('wxht'))
+    return len(res)
+
+# 统计上传成功和失败的外销合同号数量
+def count_export_contract_upload_results(data: Dict) -> Tuple[int, int]:
+    """统计上传成功和失败的外销合同号数量"""
+    import re
+    message = data['message']
+
+    # 统计✅和❌数量
+    success_count = len(re.findall('✅', message))
+    fail_count = len(re.findall('❌', message))
+
+    return success_count, fail_count
+
+if __name__ == '__main__':
+    # 测试函数
+    temp = {'code': 200,
+            'message': '✅外销合同号为A25TH04048-5，币别为CNY的票上传OA成功。\n✅外销合同号为A25TH02015-32，币别为CNY的票上传OA成功。\n✅外销合同号为A25TA03011-103，币别为CNY的票上传OA成功。\n✅外销合同号为A25TH02045-32，币别为CNY的票上传OA成功。\n✅外销合同号为A25TH04048-6，币别为CNY的票上传OA成功。\n✅外销合同号为A25TH02045-33，币别为CNY的票上传OA成功。\n✅外销合同号为A25TH02045-34，币别为CNY的票上传OA成功。\n✅外销合同号为A25TH02045-35，币别为CNY的票上传OA成功。\n✅外销合同号为A25TH02045-36，币别为CNY的票上传OA成功。\n✅外销合同号为A25TH06034-2，币别为CNY的票上传OA成功。\n✅外销合同号为A25TH04048-7，币别为CNY的票上传OA成功。\n✅外销合同号为A25TA03011-108，币别为CNY的票上传OA成功。'}
+    res1, res2 = count_export_contract_upload_results(temp)
+    print(res1, res2)
