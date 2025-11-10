@@ -162,7 +162,7 @@ def get_upload_logger() -> logging.Logger:
     # 记录设备ID（仅第一次创建时）
     if not hasattr(get_upload_logger, "_device_logged"):
         try:
-            with open("../device_id.txt", "r", encoding="utf-8") as f:
+            with open("./device_id.txt", "r", encoding="utf-8") as f:
                 content = f.read().strip()
                 logger.info(f"device_id: {content}")
             get_upload_logger._device_logged = True
@@ -198,7 +198,7 @@ def get_preview_logger() -> logging.Logger:
     # 记录设备ID（仅第一次创建时）
     if not hasattr(get_preview_logger, "_device_logged"):
         try:
-            with open("../device_id.txt", "r", encoding="utf-8") as f:
+            with open("./device_id.txt", "r", encoding="utf-8") as f:
                 content = f.read().strip()
                 logger.info(f"device_id: {content}")
             get_preview_logger._device_logged = True
@@ -215,7 +215,7 @@ def get_error_logger() -> logging.Logger:
     # 记录设备ID（仅第一次创建时）
     if not hasattr(get_error_logger, "_device_logged"):
         try:
-            with open("../device_id.txt", "r", encoding="utf-8") as f:
+            with open("./device_id.txt", "r", encoding="utf-8") as f:
                 content = f.read().strip()
                 logger.error(f"device_id: {content}")
             get_error_logger._device_logged = True

@@ -18,8 +18,11 @@ from PySide6.QtWidgets import (
 )
 
 from config.config import EXTRA_FIELD
-from utils.common import generate_light_colors
+from utils.common import generate_light_colors, count_outside_sales_contracts
+from utils.logger import get_file_conversion_logger, get_error_logger
 
+logger = get_file_conversion_logger()
+error_logger = get_error_logger()
 
 class EditController(QObject):
     """编辑功能控制器
@@ -298,7 +301,6 @@ class EditController(QObject):
         add_action = menu.addAction("在下方增加一行")
         add_action.triggered.connect(lambda: self.add_row(row))
 
-
         menu.exec(self.view.data_table.mapToGlobal(pos))
 
     def _delete_selected_rows(self, selected_rows: set) -> None:
@@ -461,6 +463,9 @@ class EditController(QObject):
         """设置要编辑的数据"""
         # 更新编辑视图中的数据展示
         data = self.data_manager.current_data
+        contract_len = count_outside_sales_contracts(data)
+        logger.info(f'涉及{contract_len}个外销合同号')
+        logger.info(f'识别了{len(data)}条费用信息')
         self.data_display(data)
 
     def _on_finish_clicked(self) -> None:

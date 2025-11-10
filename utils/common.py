@@ -6,9 +6,9 @@ import os
 import colorsys
 import datetime
 import shutil
-from typing import List, Union, Optional
+from typing import List, Union, Optional, Dict
 
-
+# 获取文件名列表
 def get_filename_list(file_path: Union[str, List[str]]) -> List[str]:
     """获取文件名列表
     
@@ -43,7 +43,7 @@ def get_filename_list(file_path: Union[str, List[str]]) -> List[str]:
         print(f"获取文件名列表时出错: {str(e)}")
         return []
 
-
+# 生成浅色系颜色
 def generate_light_colors(count: int = 50, preset: Optional[List[str]] = None) -> List[str]:
     """生成浅色系颜色，循环使用预设颜色
 
@@ -96,7 +96,7 @@ def generate_light_colors(count: int = 50, preset: Optional[List[str]] = None) -
         # 返回安全的默认颜色列表
         return ["#FFFFFF"] * max(0, count)
 
-
+# 添加额外的浅色系颜色
 def _generate_additional_colors(count: int) -> List[str]:
     """生成额外的浅色系颜色
     
@@ -149,7 +149,7 @@ def _generate_additional_colors(count: int) -> List[str]:
         # 返回安全的默认颜色列表
         return ["#E8F4FD"] * max(0, count)
 
-
+#  验证文件路径
 def validate_file_path(file_path: str) -> bool:
     """验证文件路径是否有效
     
@@ -174,7 +174,7 @@ def validate_file_path(file_path: str) -> bool:
         print(f"验证文件路径时出错: {str(e)}")
         return False
 
-
+# 获取文件大小
 def safe_get_file_size(file_path: str) -> int:
     """安全地获取文件大小
     
@@ -194,7 +194,7 @@ def safe_get_file_size(file_path: str) -> int:
         print(f"获取文件大小时出错: {str(e)}")
         return -1
 
-
+# 为文件名添加时间戳
 def add_timestamp_to_filename(file_path: str) -> str:
     """为文件名添加时间戳并返回新文件路径"""
     dir_name, base_name = os.path.split(file_path)
@@ -204,3 +204,12 @@ def add_timestamp_to_filename(file_path: str) -> str:
     new_path = os.path.join(dir_name, new_name)
     shutil.copy2(file_path, new_path)
     return new_path
+
+# 计算多少个外销合同号
+def count_outside_sales_contracts(data: Dict) -> int:
+    """计算多少个外销合同号"""
+    res = set()
+    for item in data:
+        if item.get("外销合同号"):
+            res.add(item.get("外销合同号"))
+    return len(res)
