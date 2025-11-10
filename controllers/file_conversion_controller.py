@@ -1,21 +1,19 @@
 import os
 import shutil
-from pathlib import Path
 from typing import List, Tuple, Dict, Any
 from PySide6.QtCore import QThread, Signal
 
-from utils.file_to_pdf import excel_to_pdf, docx_to_pdf, rtf_to_pdf
-from utils.logger import get_file_conversion_logger, get_error_logger
+from utils.file_to_pdf import docx_to_pdf, rtf_to_pdf
+from utils.logger import get_file_conversion_logger, get_error_logger, upload_all_logs
 from utils.model_md_to_json import extract_info_from_md
 from utils.process_excel.excel_process import (
     convert_xls_to_xlsx,
     split_excel_sheets,
     convert_excel_to_images,
 )
-from utils.process_excel.excel_layout_analyzer import detect_excel_layout
+from utils.process_excel.excel_llm import detect_excel_layout, determine_header_index
 from utils.process_excel.process_flat_layout import (
     read_excel_first_20_rows,
-    determine_header_index,
     split_excel_by_rows_with_header,
     format_excel_files_in_directory,
 )
@@ -59,7 +57,7 @@ class DocumentConversionWorker(QThread):
             )
 
             if not converted_files and not excel_result.get("excel_data"):
-                error_msg = "没有成功转换任何文件，请检查文件是否损坏或格式是否正确"
+                error_msg = "请重新分析文件，模型没有提取到有效数据。"
                 self.conversion_finished.emit([], {}, False, error_msg, {})
                 return
 
@@ -114,7 +112,7 @@ class DocumentConversionWorker(QThread):
                 except Exception as e:
                     error_msg = f"Word文档转换失败 {filename}: {str(e)}"
                     print(error_msg)
-                    logger.error(error_msg)
+                    error_logger.error(error_msg)
                     continue
 
             elif ext_lower in [".xls", ".xlsx"]:
@@ -145,7 +143,7 @@ class DocumentConversionWorker(QThread):
                 except Exception as e:
                     error_msg = f"Excel文档处理失败 {filename}: {str(e)}"
                     print(error_msg)
-                    logger.error(error_msg)
+                    error_logger.error(error_msg)
                     continue
 
             elif ext_lower in [".rtf"]:
@@ -170,7 +168,7 @@ class DocumentConversionWorker(QThread):
                 except Exception as e:
                     error_msg = f"RTF文档转换失败 {filename}: {str(e)}"
                     print(error_msg)
-                    logger.error(error_msg)
+                    error_logger.error(error_msg)
                     continue
 
             elif ext_lower in [".pdf", ".jpg", ".jpeg", ".png"]:
@@ -194,7 +192,7 @@ class DocumentConversionWorker(QThread):
                 except Exception as e:
                     error_msg = f"文件复制失败 {filename}: {str(e)}"
                     print(error_msg)
-                    logger.error(error_msg)
+                    error_logger.error(error_msg)
                     continue
 
         return converted_files, file_mapping, excel_result
@@ -440,7 +438,7 @@ class DocumentConversionWorker(QThread):
         except Exception as e:
             error_msg = f"扁平式布局数据提取失败: {str(e)}"
             print(error_msg)
-            logger.error(error_msg)
+            error_logger.error(error_msg)
             return []
 
     def _is_excel_empty(self, file_path: str) -> bool:
@@ -518,5 +516,5 @@ class DocumentConversionWorker(QThread):
         except Exception as e:
             error_msg = f"分块布局数据提取失败: {str(e)}"
             print(error_msg)
-            logger.error(error_msg)
+            error_logger.error(error_msg)
             return []
