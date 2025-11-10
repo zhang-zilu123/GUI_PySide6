@@ -47,6 +47,7 @@ class UploadController(QObject):
         self.data_manager = data_manager
         self.uploaded_files: List[str] = []
         self.current_workers: List[ExtractDataWorker] = []
+        self.excel_data_cache = []  # 用于缓存Excel数据
         self._setup_controller()
 
     def _setup_controller(self) -> None:
@@ -528,22 +529,32 @@ class UploadController(QObject):
         for file in self.uploaded_files:
             file_extension = Path(file).suffix.lower()
             if file_extension in [".pdf"]:
-                res = up_local_file(local_file_path=file,
-                                    object_prefix='chatbot_25_0528/muai-models/cost_ident/pdf_file')
+                res = up_local_file(
+                    local_file_path=file,
+                    object_prefix="chatbot_25_0528/muai-models/cost_ident/pdf_file",
+                )
             elif file_extension in [".doc", ".docx", ".rtf"]:
-                res = up_local_file(local_file_path=file,
-                                    object_prefix='chatbot_25_0528/muai-models/cost_ident/doc_file')
+                res = up_local_file(
+                    local_file_path=file,
+                    object_prefix="chatbot_25_0528/muai-models/cost_ident/doc_file",
+                )
             elif file_extension in [".xls", ".xlsx"]:
-                res = up_local_file(local_file_path=file,
-                                    object_prefix='chatbot_25_0528/muai-models/cost_ident/excel_file')
+                res = up_local_file(
+                    local_file_path=file,
+                    object_prefix="chatbot_25_0528/muai-models/cost_ident/excel_file",
+                )
             elif file_extension in [".jpg", ".jpeg", ".png", ".bmp"]:
-                res = up_local_file(local_file_path=file,
-                                    object_prefix='chatbot_25_0528/muai-models/cost_ident/image_file')
+                res = up_local_file(
+                    local_file_path=file,
+                    object_prefix="chatbot_25_0528/muai-models/cost_ident/image_file",
+                )
             else:
-                res = up_local_file(local_file_path=file,
-                                    object_prefix='chatbot_25_0528/muai-models/cost_ident/other_file')
-            logger.info(f'上传文件 {file} 成功，OSS对象键: {res}')
-        logger.info(f'所有文件上传完成，共上传 {len(self.uploaded_files)} 个文件')
+                res = up_local_file(
+                    local_file_path=file,
+                    object_prefix="chatbot_25_0528/muai-models/cost_ident/other_file",
+                )
+            logger.info(f"上传文件 {file} 成功，OSS对象键: {res}")
+        logger.info(f"所有文件上传完成，共上传 {len(self.uploaded_files)} 个文件")
 
         if self._has_document_files(self.uploaded_files):
             # 更新状态提示
@@ -585,8 +596,33 @@ class UploadController(QObject):
         self._cleanup_worker()
         if success:
             # 检查是否有 Excel 的特殊处理结果
-            if excel_result and excel_result.get("excel_data"):
-                # Excel 文件已经完成数据提取
+            has_excel_data = excel_result and excel_result.get("excel_data")
+
+            if has_excel_data and converted_files:
+                # 同时有Excel数据和其他文件需要处理
+                print(
+                    f"Excel 数据提取完成，共 {len(excel_result['excel_data'])} 条记录"
+                )
+                print(f"继续处理其他 {len(converted_files)} 个文件")
+                self._on_status_updated("Excel 数据提取完成，继续处理其他文件...")
+
+                # 先保存Excel数据
+                self.excel_data_cache = excel_result.get("excel_data", [])
+
+                # 继续处理其他文件
+                output_dir = os.path.dirname(converted_files[0])
+                worker = ExtractDataWorker(
+                    [output_dir],
+                    process_directory=True,
+                    original_file_mapping=file_mapping,
+                )
+                worker.finished.connect(self._on_worker_finished_with_excel)
+                worker.status_updated.connect(self._on_status_updated)
+                worker.start()
+                self.current_workers.append(worker)
+
+            elif has_excel_data:
+                # 只有Excel数据，没有其他文件
                 print(
                     f"Excel 数据提取完成，共 {len(excel_result['excel_data'])} 条记录"
                 )
@@ -604,8 +640,9 @@ class UploadController(QObject):
 
                 # 直接触发完成事件
                 self._on_worker_finished(filename_str, excel_data, True, "")
+
             elif converted_files:
-                # 转换成功，开始PDF分析
+                # 没有Excel，只有其他文件需要处理
                 print(f"文档转换完成，开始分析 {len(converted_files)} 个文件")
                 print(f"文件映射: {file_mapping}")
 
@@ -624,7 +661,7 @@ class UploadController(QObject):
                 self._handle_extraction_error(error_msg)
         else:
             # 转换失败
-            error_logger.error(f'文档转换失败: {error_msg}')
+            error_logger.error(f"文档转换失败: {error_msg}")
             self._handle_extraction_error(error_msg)
 
     def _on_worker_finished(self, filename_str, data, success, error_msg):
@@ -635,6 +672,59 @@ class UploadController(QObject):
             self._handle_extraction_success(filename_str, data)
         else:
             self._handle_extraction_error(error_msg)
+
+        if not self.current_workers:
+            self._finish_processing()
+
+    def _on_worker_finished_with_excel(self, filename_str, data, success, error_msg):
+        """处理工作线程完成事件（包含Excel数据）"""
+        self._cleanup_worker()
+
+        if success:
+            # 合并Excel数据和其他文件的数据
+            combined_data = []
+
+            # 添加缓存的Excel数据
+            if hasattr(self, "excel_data_cache") and self.excel_data_cache:
+                combined_data.extend(self.excel_data_cache)
+                print(f"添加Excel数据: {len(self.excel_data_cache)} 条")
+                # 清除缓存
+                delattr(self, "excel_data_cache")
+
+            # 添加其他文件的数据
+            if data:
+                combined_data.extend(data)
+                print(f"添加其他文件数据: {len(data)} 条")
+
+            # 构建完整的文件名字符串
+            excel_files = [
+                os.path.basename(f)
+                for f in self.uploaded_files
+                if f.lower().endswith((".xls", ".xlsx"))
+            ]
+            other_files = filename_str.split(", ") if filename_str else []
+            all_files = excel_files + other_files
+            combined_filename_str = ", ".join(all_files)
+
+            print(f"合并数据完成，总计: {len(combined_data)} 条")
+            self._handle_extraction_success(combined_filename_str, combined_data)
+        else:
+            # 如果其他文件处理失败，仍然使用Excel数据
+            if hasattr(self, "excel_data_cache") and self.excel_data_cache:
+                print(f"其他文件处理失败，但Excel数据提取成功，使用Excel数据")
+                excel_filename_str = ", ".join(
+                    [
+                        os.path.basename(f)
+                        for f in self.uploaded_files
+                        if f.lower().endswith((".xls", ".xlsx"))
+                    ]
+                )
+                self._handle_extraction_success(
+                    excel_filename_str, self.excel_data_cache
+                )
+                delattr(self, "excel_data_cache")
+            else:
+                self._handle_extraction_error(error_msg)
 
         if not self.current_workers:
             self._finish_processing()
