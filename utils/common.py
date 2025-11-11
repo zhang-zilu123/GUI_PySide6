@@ -212,8 +212,8 @@ def count_outside_sales_contracts(data: Dict) -> int:
     if not data:
         return 0
     for item in data:
-        if item.get("外销合同号"):
-            res.add(item.get("外销合同号"))
+        if item.get("外销合同"):
+            res.add(item.get("外销合同"))
     return len(res)
 
 # 计算提交数据中有多少个外销合同号
