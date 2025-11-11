@@ -11,7 +11,8 @@ from utils.process_excel.excel_process import (
     convert_excel_to_images,
     auto_adjust_excel_column_width,
 )
-from utils.process_excel.excel_llm import detect_excel_layout, determine_header_index, extract_excel_data_to_markdown
+from utils.process_excel.excel_llm import detect_excel_layout, determine_header_index, extract_excel_data_to_markdown, \
+    correct_excel_table
 from utils.process_excel.process_flat_layout import (
     read_excel_first_20_rows,
     split_excel_by_rows_with_header,
@@ -375,7 +376,7 @@ class ExcelProcessHandler:
         # 使用大模型提取数据
         self._emit_status(f"正在提取数据: {sheet_name}")
         markdown_content = extract_excel_data_to_markdown([image_output])
-        print(f"提取的 Markdown 内容长度: {len(markdown_content)} for {sheet_name}")
+        print(f"提取的 Markdown 内容长度: {len(markdown_content)} for {sheet_name}, content{markdown_content}")
 
         return {
             "file": image_output,
@@ -406,7 +407,13 @@ class ExcelProcessHandler:
         print(f"Excel总行数: {row_count} for {sheet_name}")
 
         # 3. 计算每个文件的行数（按10份切分）
-        rows_per_file = max(1, int(row_count / 10))
+        # if row_count <= 150:
+        #     rows_per_file = min(row_count, 50)
+        # elif row_count <= 400:
+        #     rows_per_file = min(70, max(50, int(row_count / 6)))
+        # else:
+        #     rows_per_file = min(80, max(50, int(row_count / (row_count // 70))))
+        rows_per_file = 40
         print(f"每个文件行数: {rows_per_file}")
 
         # 4. 按行切分成多个Excel文件
@@ -451,6 +458,10 @@ class ExcelProcessHandler:
         self._emit_status(f"正在提取数据: {sheet_name}")
         markdown_content = extract_excel_data_to_markdown(image_files)
         print(f"提取的 Markdown 内容长度: {len(markdown_content)} for {sheet_name}")
+        with open("output.md", "w", encoding="utf-8") as f:
+            f.write(markdown_content)
+        # markdown_content = correct_excel_table(image_files, markdown_content)
+        # print(f"修正后的 Markdown 内容: {markdown_content}")
 
         return {
             "files": image_files,
