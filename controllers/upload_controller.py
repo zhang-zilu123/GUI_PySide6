@@ -614,10 +614,17 @@ class UploadController(QObject):
 
     def _start_direct_analysis(self):
         """开始直接分析（原有流程）"""
+        # 转换映射格式：将完整路径映射转换为文件名（无扩展名）映射
+        file_name_mapping = {}
+        for temp_path, original_path in self.file_path_mapping.items():
+            # 提取不带扩展名的文件名作为 key
+            file_name = os.path.splitext(os.path.basename(temp_path))[0]
+            file_name_mapping[file_name] = original_path
+
         worker = ExtractDataWorker(
             self.uploaded_files.copy(),
             process_directory=False,
-            original_file_mapping=self.file_path_mapping
+            original_file_mapping=file_name_mapping
         )
         worker.finished.connect(self._on_worker_finished)
         worker.status_updated.connect(self._on_status_updated)
@@ -733,7 +740,6 @@ class UploadController(QObject):
     def _on_worker_finished_with_excel(self, filename_str, data, success, error_msg):
         """处理工作线程完成事件（包含Excel数据）"""
         self._cleanup_worker()
-
         if success:
             # 合并Excel数据和其他文件的数据
             combined_data = []
@@ -807,6 +813,26 @@ class UploadController(QObject):
     def _handle_extraction_success(self, filename_str, data):
         """处理提取成功"""
         try:
+            print(f'filename_str213123: {filename_str}, data: {data}")')
+            filename_list = [name.strip() for name in filename_str.split(", ")]
+            flag = False
+            filename_contract_mapping = {}
+            for filename in filename_list:
+                import re
+                contract_number = re.split(r'[-—–]+', filename)
+                if len(contract_number) > 1 and contract_number[0]:
+                    contract_number = contract_number[0]
+                    flag = True
+                else:
+                    contract_number = None
+                filename_contract_mapping[filename] = contract_number
+            if flag:
+                if data:
+                    for item in data:
+                        filename = os.path.basename(item["源文件"])
+                        if filename_contract_mapping.get(filename):
+                            item['外销合同'] = filename_contract_mapping.get(filename)
+
             print(f"开始处理提取成功的数据: {len(data)} 条记录")
             # 立即更新UI状态，显示数据处理进度
             self.view.title.setText(f"正在处理数据({len(data)}条记录)，请稍候...")
