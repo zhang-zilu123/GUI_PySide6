@@ -5,10 +5,13 @@
 2. 统一的日志格式
 3. 自动创建日志目录
 4. 防止重复添加处理器
+5. 全局异常捕获和记录
 """
 
 import logging
 import os
+import sys
+import traceback
 from datetime import datetime
 from typing import Optional
 
@@ -211,7 +214,103 @@ def get_error_logger() -> logging.Logger:
     current_time = datetime.now().strftime("%Y%m%d-%H%M")
     log_file = f"{current_time}-错误日志.log"
     logger = LoggerManager.get_logger("error", log_file, level=logging.ERROR)
+
+    # 记录设备ID（仅第一次创建时）
+    if not hasattr(get_error_logger, "_device_logged"):
+        try:
+            with open("./device_id.txt", "r", encoding="utf-8") as f:
+                content = f.read().strip()
+                logger.info(f"device_id: {content}")
+            get_error_logger._device_logged = True
+        except Exception:
+            pass  # 忽略设备ID读取失败
+
     return logger
+
+def setup_global_exception_handler() -> None:
+    """设置全局异常处理器，捕获所有未处理的异常"""
+    error_logger = get_error_logger()
+
+    def handle_exception(exc_type, exc_value, exc_traceback):
+        """全局异常处理函数"""
+        # 忽略键盘中断
+        if issubclass(exc_type, KeyboardInterrupt):
+            sys.__excepthook__(exc_type, exc_value, exc_traceback)
+            return
+
+        # 记录完整的异常信息
+        error_logger.error(
+            "未捕获的异常:", exc_info=(exc_type, exc_value, exc_traceback)
+        )
+
+        # 也输出到控制台
+        print(f"\n{'=' * 60}")
+        print("发生未捕获的异常，详细信息已记录到错误日志文件")
+        print(f"{'=' * 60}")
+        traceback.print_exception(exc_type, exc_value, exc_traceback)
+
+    # 设置全局异常钩子
+    sys.excepthook = handle_exception
+
+    # 对于多线程环境，设置 threading 的异常处理
+    try:
+        import threading
+
+        def thread_exception_handler(args):
+            """线程异常处理函数"""
+            error_logger.error(
+                f"线程 '{args.thread.name}' 中发生未捕获的异常:",
+                exc_info=(args.exc_type, args.exc_value, args.exc_traceback),
+            )
+            print(f"\n{'=' * 60}")
+            print(
+                f"线程 '{args.thread.name}' 发生未捕获的异常，详细信息已记录到错误日志文件"
+            )
+            print(f"{'=' * 60}")
+
+        threading.excepthook = thread_exception_handler
+    except Exception as e:
+        error_logger.warning(f"无法设置线程异常处理器: {e}")
+
+def log_exception(exception: Exception, context: str = "") -> None:
+    """记录异常到错误日志
+
+    Args:
+        exception: 要记录的异常对象
+        context: 异常发生的上下文描述
+
+    Example:
+        try:
+            # 一些可能出错的代码
+            result = risky_operation()
+        except Exception as e:
+            log_exception(e, "执行风险操作时")
+            # 继续处理或重新抛出
+    """
+    error_logger = get_error_logger()
+
+    if context:
+        error_logger.error(f"{context}发生异常: {str(exception)}", exc_info=True)
+    else:
+        error_logger.error(f"发生异常: {str(exception)}", exc_info=True)
+
+def log_error(message: str, exception: Optional[Exception] = None) -> None:
+    """记录错误信息到错误日志
+
+    Args:
+        message: 错误消息
+        exception: 可选的异常对象
+
+    Example:
+        log_error("文件处理失败", exception)
+        log_error("配置加载失败")
+    """
+    error_logger = get_error_logger()
+
+    if exception:
+        error_logger.error(f"{message}: {str(exception)}", exc_info=True)
+    else:
+        error_logger.error(message)
 
 def upload_all_logs() -> None:
     """上传所有日志文件到OSS
@@ -244,9 +343,12 @@ def upload_all_logs() -> None:
         if os.path.exists(log_file):
             # 检查文件大小，如果大于0KB才上传
             if os.path.getsize(log_file) > 0:
-                up_local_file(log_file, object_prefix='chatbot_25_0528/muai-models/cost_ident/log')
+                up_local_file(
+                    log_file, object_prefix="chatbot_25_0528/muai-models/cost_ident/log"
+                )
             else:
                 print(f"文件 {log_file} 大小为0KB，跳过上传")
+    print('所有日志文件上传完成')
 
 # ==================== 使用示例 ====================
 if __name__ == "__main__":

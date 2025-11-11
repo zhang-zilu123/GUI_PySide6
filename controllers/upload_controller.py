@@ -12,7 +12,7 @@ from PySide6.QtWidgets import QFileDialog, QMessageBox, QHBoxLayout, QPushButton
 from PySide6.QtCore import QObject, Signal, QThread, Qt
 
 from controllers.extract_data_controller import ExtractDataWorker
-from utils.logger import get_upload_logger, get_error_logger
+from utils.logger import get_upload_logger, get_error_logger, log_exception, log_error
 from controllers.file_conversion_controller import DocumentConversionWorker
 from utils.upload_file_to_oss import up_local_file
 
@@ -97,6 +97,7 @@ class UploadController(QObject):
         except Exception as e:
             error_msg = f"复制文件到临时目录失败 {original_file_path}: {str(e)}"
             logger.error(error_msg)
+            log_exception(e, "复制文件到临时目录时")
             raise Exception(error_msg)
 
     def _connect_signals(self) -> None:
@@ -192,6 +193,7 @@ class UploadController(QObject):
                 except Exception as e:
                     error_msg = f"处理文件失败 {file_path}: {str(e)}"
                     logger.error(error_msg)
+                    log_exception(e, f"处理文件 {file_path} 时")
                     invalid_files.append(file_path)
             else:
                 invalid_files.append(file_path)
@@ -237,6 +239,7 @@ class UploadController(QObject):
             return ext.lower() in valid_extensions
         except Exception as e:
             print(f"文件验证异常 {file_path}: {str(e)}")
+            log_exception(e, f"验证文件 {file_path} 时")
             return False
 
     def _is_file_in_current_upload(self, file_path: str) -> bool:
@@ -917,6 +920,7 @@ class UploadController(QObject):
         except Exception as e:
             error_msg = f"保存数据时出错: {str(e)}"
             print(f"处理错误: {error_msg}")
+            log_exception(e, "保存数据时")
             QMessageBox.critical(self.view, "错误", error_msg)
             self._reset_button_states()
 
@@ -945,6 +949,7 @@ class UploadController(QObject):
                     )
         except Exception as e:
             print(f"发射数据就绪信号失败: {str(e)}")
+            log_exception(e, "发射数据就绪信号时")
             self._reset_button_states()
 
     def _merge_and_save_data(self, filename_str, data):
@@ -971,6 +976,7 @@ class UploadController(QObject):
                 print("清理转换文件夹成功")
             except Exception as e:
                 print(f"清理转换文件夹失败: {str(e)}")
+                log_exception(e, "清理转换文件夹时")
 
         # 清理临时文件目录
         self._cleanup_temp_files()
@@ -992,6 +998,7 @@ class UploadController(QObject):
             except Exception as e:
                 error_msg = f"清理临时文件目录失败: {str(e)}"
                 logger.error(error_msg)
+                log_exception(e, "清理临时文件目录时")
                 print(error_msg)
 
     def _handle_extraction_error(self, error_msg):
@@ -1038,6 +1045,7 @@ class UploadController(QObject):
             self.view.upload_frame.setEnabled(True)
         except Exception as e:
             print(f"重置按钮状态失败: {str(e)}")
+            log_exception(e, "重置按钮状态时")
 
     def _cleanup_conversion_files(self):
         """清理转换文件夹"""
@@ -1051,6 +1059,7 @@ class UploadController(QObject):
                 shutil.rmtree(str(converted_dir))
             except Exception as e:
                 print(f"清理转换文件夹失败: {str(e)}")
+                log_exception(e, "清理转换文件夹时")
 
         # 同时清理临时文件
         self._cleanup_temp_files()
