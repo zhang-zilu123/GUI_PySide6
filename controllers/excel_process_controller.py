@@ -65,7 +65,6 @@ class ExcelProcessHandler:
         """
         result = {
             "files": [],
-            "type": None,
             "excel_data": [],
             "file_mapping": {},  # 结果文件名 -> 原始文件路径
         }
@@ -234,8 +233,6 @@ class ExcelProcessHandler:
                         file_name = os.path.splitext(os.path.basename(file))[0]
                         result["file_mapping"][file_name] = sheet_info["original_file"]
 
-                    if not result["type"]:
-                        result["type"] = sheet_result.get("type")
         print("处理完成", result)
         return result
 
@@ -250,7 +247,7 @@ class ExcelProcessHandler:
         返回：
             处理结果字典
         """
-        result = {"files": [], "data": [], "type": None}
+        result = {"files": [], "data": []}
 
         sheet_path = sheet_info["sheet_path"]
         sheet_name = sheet_info["sheet_name"]
@@ -272,8 +269,6 @@ class ExcelProcessHandler:
                     item["源文件"] = display_file
                 result["data"].extend(flat_data)
 
-            result["type"] = "flat"
-
         elif layout_type == 2:
             # 主表+子表布局
             self._emit_status(f"处理主表+子表布局: {sheet_name}")
@@ -287,8 +282,6 @@ class ExcelProcessHandler:
                 )
                 result["data"].extend(master_detail_data)
 
-            result["type"] = "master_detail"
-
         elif layout_type == 3:
             # 分块布局
             self._emit_status(f"处理分块布局: {sheet_name}")
@@ -296,14 +289,11 @@ class ExcelProcessHandler:
 
             if result_data:
                 result["files"].append(result_data["file"])
-
                 self._emit_status(f"正在提取分块布局数据: {sheet_name}")
                 block_data = self._extract_block_layout_data(
                     result_data["markdown"], original_file
                 )
                 result["data"].extend(block_data)
-
-            result["type"] = "block"
 
         else:
             # 未知布局，使用分块处理
@@ -319,8 +309,6 @@ class ExcelProcessHandler:
                     result_data["markdown"], original_file
                 )
                 result["data"].extend(block_data)
-
-            result["type"] = "block"
 
         return result
 
