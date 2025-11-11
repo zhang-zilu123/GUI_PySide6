@@ -1,6 +1,7 @@
 import os
 import json
 import uuid
+import xlwings as xw
 from typing import List, Tuple, Dict, Any
 from PySide6.QtCore import Signal, SignalInstance
 
@@ -8,8 +9,9 @@ from utils.process_excel.excel_process import (
     convert_xls_to_xlsx,
     split_excel_sheets,
     convert_excel_to_images,
+    auto_adjust_excel_column_width,
 )
-from utils.process_excel.excel_llm import detect_excel_layout, determine_header_index
+from utils.process_excel.excel_llm import detect_excel_layout, determine_header_index, extract_excel_data_to_markdown
 from utils.process_excel.process_flat_layout import (
     read_excel_first_20_rows,
     split_excel_by_rows_with_header,
@@ -17,7 +19,10 @@ from utils.process_excel.process_flat_layout import (
 )
 from utils.process_excel.process_excel_blocks import (
     format_excel_and_convert_to_image,
-    extract_excel_data_to_markdown,
+)
+from utils.process_excel.process_master_detail_layout import (
+    get_excel_row_count,
+    split_excel_by_rows,
 )
 from utils.model_md_to_json import extract_info_from_md
 from utils.logger import get_file_conversion_logger, get_error_logger
@@ -29,7 +34,8 @@ error_logger = get_error_logger()
 class ExcelProcessHandler:
     """Excel文件处理器"""
 
-    def __init__(self, output_dir: str, status_signal: SignalInstance = None, original_file_mapping: Dict[str, str] = None):
+    def __init__(self, output_dir: str, status_signal: SignalInstance = None,
+                 original_file_mapping: Dict[str, str] = None):
         """
         初始化Excel处理器
 
@@ -230,7 +236,7 @@ class ExcelProcessHandler:
 
                     if not result["type"]:
                         result["type"] = sheet_result.get("type")
-
+        print("处理完成", result)
         return result
 
     def _process_single_sheet(self, sheet_info: dict, layout_type: int) -> dict:
@@ -270,8 +276,17 @@ class ExcelProcessHandler:
 
         elif layout_type == 2:
             # 主表+子表布局
-            self._emit_status(f"跳过主表+子表布局: {sheet_name}")
-            print(f"    布局类型2暂未实现，跳过")
+            self._emit_status(f"处理主表+子表布局: {sheet_name}")
+            result_data = self._process_master_detail_layout(sheet_path, sheet_name, work_dir)
+
+            if result_data:
+                result["files"].extend(result_data["files"])
+                self._emit_status(f"正在提取主表+子表布局数据: {sheet_name}")
+                master_detail_data = self._extract_block_layout_data(
+                    result_data["markdown"], original_file
+                )
+                result["data"].extend(master_detail_data)
+
             result["type"] = "master_detail"
 
         elif layout_type == 3:
@@ -371,11 +386,86 @@ class ExcelProcessHandler:
 
         # 使用大模型提取数据
         self._emit_status(f"正在提取数据: {sheet_name}")
-        markdown_content = extract_excel_data_to_markdown(image_output)
+        markdown_content = extract_excel_data_to_markdown([image_output])
         print(f"提取的 Markdown 内容长度: {len(markdown_content)} for {sheet_name}")
 
         return {
             "file": image_output,
+            "markdown": markdown_content,
+        }
+
+    def _process_master_detail_layout(
+            self,
+            excel_file: str,
+            sheet_name: str,
+            work_dir: str,
+    ) -> dict:
+        """
+        处理主表+子表布局的 Excel
+
+        返回：
+            包含文件路径列表和 markdown 数据的字典
+        """
+        # 1. 调整列宽
+        self._emit_status(f"正在调整列宽: {sheet_name}")
+        adjusted_file = os.path.join(work_dir, f"adjusted_{sheet_name}.xlsx")
+        auto_adjust_excel_column_width(excel_file, adjusted_file)
+        print(f"列宽调整完成: {adjusted_file}")
+
+        # 2. 获取Excel行数
+        self._emit_status(f"正在获取行数: {sheet_name}")
+        row_count = get_excel_row_count(adjusted_file)
+        print(f"Excel总行数: {row_count} for {sheet_name}")
+
+        # 3. 计算每个文件的行数（按10份切分）
+        rows_per_file = max(1, int(row_count / 10))
+        print(f"每个文件行数: {rows_per_file}")
+
+        # 4. 按行切分成多个Excel文件
+        self._emit_status(f"正在切分表格: {sheet_name}")
+        split_output_dir = os.path.join(work_dir, f"master_detail_split_{sheet_name}")
+        os.makedirs(split_output_dir, exist_ok=True)
+        split_excel_by_rows(adjusted_file, split_output_dir, rows_per_file)
+        print(f"Excel切分完成: {split_output_dir}")
+
+        # 5. 获取切分后的文件列表（按文件名排序）
+        split_files = sorted([
+            os.path.join(split_output_dir, f)
+            for f in os.listdir(split_output_dir)
+            if f.endswith(".xlsx")
+        ])
+        print(f"切分后文件数量: {len(split_files)}")
+
+        # 6. 将所有Excel文件转换为图片
+        self._emit_status(f"正在转换为图片: {sheet_name}")
+        image_output_dir = os.path.join(work_dir, f"master_detail_images_{sheet_name}")
+        os.makedirs(image_output_dir, exist_ok=True)
+        convert_excel_to_images(split_files, image_output_dir)
+
+        # 7. 获取所有图片文件（按文件名中的起始行号排序）
+        import re
+
+        def extract_start_row(filename):
+            """从文件名中提取起始行号用于排序"""
+            match = re.search(r'rows_(\d+)_to_\d+\.png$', filename)
+            if match:
+                return int(match.group(1))
+            return 0
+
+        image_files = sorted(
+            [os.path.join(image_output_dir, f) for f in os.listdir(image_output_dir) if f.endswith(".png")],
+            key=lambda x: extract_start_row(os.path.basename(x))
+        )
+        print(f'图片:{[os.path.basename(f) for f in image_files]}')
+        print(f"生成图片数量: {len(image_files)}")
+
+        # 8. 按顺序将所有图片输入到大模型提取数据
+        self._emit_status(f"正在提取数据: {sheet_name}")
+        markdown_content = extract_excel_data_to_markdown(image_files)
+        print(f"提取的 Markdown 内容长度: {len(markdown_content)} for {sheet_name}")
+
+        return {
+            "files": image_files,
             "markdown": markdown_content,
         }
 
@@ -487,9 +577,9 @@ class ExcelProcessHandler:
 
         return safe_name
 
-    def _is_excel_empty(self, file_path: str) -> bool:
+    def _is_excel_empty(self, file_path: str) -> bool | None:
         """
-        检查 Excel 文件是否为空（没有数据或只有空行）
+        使用 xlwings 检查 Excel 文件是否为空（没有数据或只有空行）
 
         参数：
             file_path: Excel 文件路径
@@ -497,16 +587,16 @@ class ExcelProcessHandler:
         返回：
             如果文件为空返回 True，否则返回 False
         """
+        app = xw.App(visible=False)
         try:
-            import openpyxl
-
-            workbook = openpyxl.load_workbook(file_path)
-            sheet = workbook.active
+            wb = app.books.open(file_path)
+            sheet = wb.sheets[0]
 
             # 检查是否有任何非空单元格
-            for row in sheet.iter_rows():
-                for cell in row:
-                    if cell.value is not None and str(cell.value).strip():
+            used_range = sheet.used_range
+            if used_range.value:
+                for row in used_range.value:
+                    if any(cell is not None and str(cell).strip() for cell in row):
                         return False
 
             # 所有单元格都是空的
@@ -516,3 +606,6 @@ class ExcelProcessHandler:
             print(f"检查 Excel 文件是否为空时出错: {file_path}, 错误: {str(e)}")
             # 如果出错，假设文件不为空，继续处理
             return False
+
+        finally:
+            app.quit()

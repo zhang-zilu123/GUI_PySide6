@@ -78,26 +78,18 @@ class UploadController(QObject):
         import shutil
         import uuid
         from pathlib import Path
-        
+
         try:
             # 获取原始文件名和扩展名
             original_name = os.path.basename(original_file_path)
-            name, ext = os.path.splitext(original_name)
-            
-            # 生成唯一的临时文件名（避免重名冲突）
-            unique_name = f"{name}_{uuid.uuid4().hex[:8]}{ext}"
-            temp_file_path = self.temp_dir / unique_name
-            
+            temp_file_path = self.temp_dir / original_name
             # 复制文件
             shutil.copy2(original_file_path, temp_file_path)
             temp_file_path_str = str(temp_file_path)
-            
             # 建立映射关系
             self.file_path_mapping[temp_file_path_str] = original_file_path
-            
-            logger.info(f"文件已复制到临时目录: {original_name} -> {unique_name}")
             return temp_file_path_str
-            
+
         except Exception as e:
             error_msg = f"复制文件到临时目录失败 {original_file_path}: {str(e)}"
             logger.error(error_msg)
@@ -642,7 +634,7 @@ class UploadController(QObject):
 
         # 创建转换工作线程，传递原始文件映射
         conversion_worker = DocumentConversionWorker(
-            self.uploaded_files, 
+            self.uploaded_files,
             output_dir,
             original_file_mapping=self.file_path_mapping
         )
@@ -972,7 +964,7 @@ class UploadController(QObject):
                 shutil.rmtree(str(converted_dir))
             except Exception as e:
                 print(f"清理转换文件夹失败: {str(e)}")
-        
+
         # 同时清理临时文件
         self._cleanup_temp_files()
 

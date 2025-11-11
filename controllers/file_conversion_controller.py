@@ -11,7 +11,6 @@ from controllers.excel_process_controller import ExcelProcessHandler
 logger = get_file_conversion_logger()
 error_logger = get_error_logger()
 
-
 class DocumentConversionWorker(QThread):
     """文档转换工作线程"""
 
@@ -57,7 +56,7 @@ class DocumentConversionWorker(QThread):
             self.conversion_finished.emit([], {}, False, error_msg, {})
 
     def _convert_documents_and_copy_files(
-        self,
+            self,
     ) -> Tuple[List[str], Dict[str, str], Dict[str, Any]]:
         """转换文档文件并复制其他文件到输出目录
 
@@ -88,8 +87,8 @@ class DocumentConversionWorker(QThread):
 
                     # 检查转换结果
                     if (
-                        not os.path.exists(output_pdf_path)
-                        or os.path.getsize(output_pdf_path) == 0
+                            not os.path.exists(output_pdf_path)
+                            or os.path.getsize(output_pdf_path) == 0
                     ):
                         raise ValueError(f"Word文档转换后的PDF文件为空或未生成")
 
@@ -127,8 +126,8 @@ class DocumentConversionWorker(QThread):
 
                     # 检查转换结果
                     if (
-                        not os.path.exists(output_pdf_path)
-                        or os.path.getsize(output_pdf_path) == 0
+                            not os.path.exists(output_pdf_path)
+                            or os.path.getsize(output_pdf_path) == 0
                     ):
                         raise ValueError(f"RTF文档转换后的PDF文件为空或未生成")
 
@@ -175,7 +174,7 @@ class DocumentConversionWorker(QThread):
 
             # 使用 ExcelProcessHandler 处理Excel文件，传递原始文件映射
             excel_handler = ExcelProcessHandler(
-                self.output_dir, 
+                self.output_dir,
                 self.status_updated,
                 original_file_mapping=self.original_file_mapping
             )
