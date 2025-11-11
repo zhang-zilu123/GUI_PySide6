@@ -48,12 +48,60 @@ class UploadController(QObject):
         self.uploaded_files: List[str] = []
         self.current_workers: List[ExtractDataWorker] = []
         self.excel_data_cache = []  # 用于缓存Excel数据
+        self.file_path_mapping: Dict[str, str] = {}  # 临时文件路径 -> 原始文件路径的映射
         self._setup_controller()
+        self._ensure_temp_directory()
 
     def _setup_controller(self) -> None:
         """设置控制器"""
         self._connect_signals()
         self._reset_to_initial_state()
+
+    def _ensure_temp_directory(self) -> None:
+        """确保临时文件目录存在"""
+        from pathlib import Path
+        root_dir = Path(__file__).resolve().parents[1]
+        self.temp_dir = root_dir / "file_temp"
+        if not self.temp_dir.exists():
+            self.temp_dir.mkdir(parents=True, exist_ok=True)
+            logger.info(f"创建临时文件目录: {self.temp_dir}")
+
+    def _copy_file_to_temp(self, original_file_path: str) -> str:
+        """将文件复制到临时目录
+        
+        Args:
+            original_file_path: 原始文件路径
+            
+        Returns:
+            临时文件路径
+        """
+        import shutil
+        import uuid
+        from pathlib import Path
+        
+        try:
+            # 获取原始文件名和扩展名
+            original_name = os.path.basename(original_file_path)
+            name, ext = os.path.splitext(original_name)
+            
+            # 生成唯一的临时文件名（避免重名冲突）
+            unique_name = f"{name}_{uuid.uuid4().hex[:8]}{ext}"
+            temp_file_path = self.temp_dir / unique_name
+            
+            # 复制文件
+            shutil.copy2(original_file_path, temp_file_path)
+            temp_file_path_str = str(temp_file_path)
+            
+            # 建立映射关系
+            self.file_path_mapping[temp_file_path_str] = original_file_path
+            
+            logger.info(f"文件已复制到临时目录: {original_name} -> {unique_name}")
+            return temp_file_path_str
+            
+        except Exception as e:
+            error_msg = f"复制文件到临时目录失败 {original_file_path}: {str(e)}"
+            logger.error(error_msg)
+            raise Exception(error_msg)
 
     def _connect_signals(self) -> None:
         """连接视图信号"""
@@ -134,11 +182,14 @@ class UploadController(QObject):
 
         for file_path in file_paths:
             if self._validate_file(file_path):
-                valid_files.append(file_path)
-                # if not self._is_file_already_uploaded(file_path):
-                #     valid_files.append(file_path)
-                # else:
-                #     self._show_file_exists_message(file_path)
+                # 将文件复制到临时目录
+                try:
+                    temp_file_path = self._copy_file_to_temp(file_path)
+                    valid_files.append(temp_file_path)
+                except Exception as e:
+                    error_msg = f"处理文件失败 {file_path}: {str(e)}"
+                    logger.error(error_msg)
+                    invalid_files.append(file_path)
             else:
                 invalid_files.append(file_path)
 
@@ -365,8 +416,10 @@ class UploadController(QObject):
 
     def _create_file_button(self, file_path):
         """创建文件按钮"""
-        file_button = QPushButton(os.path.basename(file_path))
-        file_button.setToolTip(file_path)
+        # 如果是临时文件，显示原始文件名
+        original_path = self.file_path_mapping.get(file_path, file_path)
+        file_button = QPushButton(os.path.basename(original_path))
+        file_button.setToolTip(original_path)
         file_button.setStyleSheet(
             """
             QPushButton {
@@ -423,6 +476,7 @@ class UploadController(QObject):
         """清空文件列表"""
         self.uploaded_files.clear()
         self._clear_file_layout()
+        self._cleanup_temp_files()
         self._reset_to_initial_state()
 
     # ==================== UI 状态管理 ====================
@@ -568,7 +622,11 @@ class UploadController(QObject):
 
     def _start_direct_analysis(self):
         """开始直接分析（原有流程）"""
-        worker = ExtractDataWorker(self.uploaded_files.copy())
+        worker = ExtractDataWorker(
+            self.uploaded_files.copy(),
+            process_directory=False,
+            original_file_mapping=self.file_path_mapping
+        )
         worker.finished.connect(self._on_worker_finished)
         worker.status_updated.connect(self._on_status_updated)
         worker.start()
@@ -582,8 +640,12 @@ class UploadController(QObject):
         root_dir = Path(__file__).resolve().parents[1]
         output_dir = str(root_dir / "converted_files")
 
-        # 创建转换工作线程
-        conversion_worker = DocumentConversionWorker(self.uploaded_files, output_dir)
+        # 创建转换工作线程，传递原始文件映射
+        conversion_worker = DocumentConversionWorker(
+            self.uploaded_files, 
+            output_dir,
+            original_file_mapping=self.file_path_mapping
+        )
         conversion_worker.conversion_finished.connect(self._on_conversion_finished)
         conversion_worker.status_updated.connect(self._on_status_updated)
         conversion_worker.start()
@@ -831,9 +893,27 @@ class UploadController(QObject):
             except Exception as e:
                 print(f"清理转换文件夹失败: {str(e)}")
 
+        # 清理临时文件目录
+        self._cleanup_temp_files()
+
         self.clear_file_list()
         self.view.title.setText("数据审核工具 - 文件上传")
         self.file_processed.emit()
+
+    def _cleanup_temp_files(self):
+        """清理临时文件目录"""
+        if hasattr(self, 'temp_dir') and self.temp_dir.exists():
+            try:
+                shutil.rmtree(str(self.temp_dir))
+                logger.info(f"清理临时文件目录成功: {self.temp_dir}")
+                # 重新创建临时目录
+                self.temp_dir.mkdir(parents=True, exist_ok=True)
+                # 清空映射
+                self.file_path_mapping.clear()
+            except Exception as e:
+                error_msg = f"清理临时文件目录失败: {str(e)}"
+                logger.error(error_msg)
+                print(error_msg)
 
     def _handle_extraction_error(self, error_msg):
         """处理提取错误"""
@@ -892,6 +972,9 @@ class UploadController(QObject):
                 shutil.rmtree(str(converted_dir))
             except Exception as e:
                 print(f"清理转换文件夹失败: {str(e)}")
+        
+        # 同时清理临时文件
+        self._cleanup_temp_files()
 
     def _show_processing_error(self, error_msg: str, title: str = "处理错误"):
         """显示处理错误对话框
