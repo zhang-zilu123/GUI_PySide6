@@ -16,6 +16,7 @@ from PySide6.QtCore import Qt
 
 from controllers.history_controller import HistoryController
 from data.data_manager import DataManager
+from utils.logger import upload_all_logs
 from views.upload_view import UploadView
 from views.edit_view import EditView
 from views.preview_view import PreviewView
@@ -25,7 +26,6 @@ from controllers.edit_controller import EditController
 from controllers.preview_controller import PreviewController
 from styles import StyleManager
 from utils.write_to_mineru_json import write_mineru_config
-
 
 class MainWindow(QMainWindow):
     """应用程序主窗口，负责管理不同界面间的切换"""
@@ -241,6 +241,7 @@ class MainWindow(QMainWindow):
             QMessageBox.No,
         )
         if reply == QMessageBox.Yes:
+            upload_all_logs()
             event.accept()
         else:
             event.ignore()

@@ -543,8 +543,6 @@ class PreviewController(QObject):
                 item["is_error"] = False
             self.data = []
 
-        # TODO:真实上传
-        upload_all_logs()
         # 保存上传记录
         self._save_upload_record(save_data)
 

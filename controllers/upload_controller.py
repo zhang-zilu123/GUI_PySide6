@@ -20,6 +20,7 @@ from utils.upload_file_to_oss import up_local_file
 logger = get_upload_logger()
 error_logger = get_error_logger()
 
+
 class UploadController(QObject):
     """上传功能控制器
 
@@ -48,7 +49,9 @@ class UploadController(QObject):
         self.uploaded_files: List[str] = []
         self.current_workers: List[ExtractDataWorker] = []
         self.excel_data_cache = []  # 用于缓存Excel数据
-        self.file_path_mapping: Dict[str, str] = {}  # 临时文件路径 -> 原始文件路径的映射
+        self.file_path_mapping: Dict[str, str] = (
+            {}
+        )  # 临时文件路径 -> 原始文件路径的映射
         self._setup_controller()
         self._ensure_temp_directory()
 
@@ -60,6 +63,7 @@ class UploadController(QObject):
     def _ensure_temp_directory(self) -> None:
         """确保临时文件目录存在"""
         from pathlib import Path
+
         root_dir = Path(__file__).resolve().parents[1]
         self.temp_dir = root_dir / "file_temp"
         if not self.temp_dir.exists():
@@ -68,10 +72,10 @@ class UploadController(QObject):
 
     def _copy_file_to_temp(self, original_file_path: str) -> str:
         """将文件复制到临时目录
-        
+
         Args:
             original_file_path: 原始文件路径
-            
+
         Returns:
             临时文件路径
         """
@@ -168,11 +172,18 @@ class UploadController(QObject):
         """
         valid_files = []
         invalid_files = []
+        duplicate_files = []
 
         # 记录总文件数用于提示
         total_count = len(file_paths)
 
         for file_path in file_paths:
+            # 检查文件是否已经在本次上传列表中（通过原始路径去重）
+            if self._is_file_in_current_upload(file_path):
+                duplicate_files.append(file_path)
+                logger.info(f"文件已在本次上传列表中，跳过: {file_path}")
+                continue
+
             if self._validate_file(file_path):
                 # 将文件复制到临时目录
                 try:
@@ -184,6 +195,10 @@ class UploadController(QObject):
                     invalid_files.append(file_path)
             else:
                 invalid_files.append(file_path)
+
+        # 如果有重复文件，显示提示信息
+        if duplicate_files:
+            self._show_duplicate_files_message(duplicate_files)
 
         self._handle_file_validation_results(valid_files, invalid_files, total_count)
 
@@ -224,6 +239,21 @@ class UploadController(QObject):
             print(f"文件验证异常 {file_path}: {str(e)}")
             return False
 
+    def _is_file_in_current_upload(self, file_path: str) -> bool:
+        """检查文件是否已在本次上传列表中（通过原始路径判断）
+
+        Args:
+            file_path: 文件路径
+
+        Returns:
+            文件是否已在本次上传列表中
+        """
+        # 检查原始文件路径是否已经在映射中
+        for temp_path, original_path in self.file_path_mapping.items():
+            if os.path.normpath(original_path) == os.path.normpath(file_path):
+                return True
+        return False
+
     def _is_file_already_uploaded(self, file_path: str) -> bool:
         """检查文件是否已经上传
 
@@ -253,8 +283,8 @@ class UploadController(QObject):
             已上传的文件名列表
         """
         if (
-                not hasattr(self.data_manager, "uploaded_file_name")
-                or not self.data_manager.uploaded_file_name
+            not hasattr(self.data_manager, "uploaded_file_name")
+            or not self.data_manager.uploaded_file_name
         ):
             return []
         if isinstance(self.data_manager.uploaded_file_name, str):
@@ -273,6 +303,36 @@ class UploadController(QObject):
             return [name.strip() for name in self.data_manager.file_name.split(",")]
         return []
 
+    def _show_duplicate_files_message(self, duplicate_files: List[str]) -> None:
+        """显示重复文件的消息
+
+        Args:
+            duplicate_files: 重复的文件路径列表
+        """
+        duplicate_names = [os.path.basename(fp) for fp in duplicate_files]
+        duplicate_count = len(duplicate_files)
+
+        # 构建消息内容
+        message_parts = []
+
+        if duplicate_count == 1:
+            message_parts.append(f"以下文件已在本次上传列表中，已自动跳过：")
+        else:
+            message_parts.append(
+                f"以下 {duplicate_count} 个文件已在本次上传列表中，已自动跳过："
+            )
+
+        # 限制显示的文件名数量
+        max_display = 10
+        if duplicate_count <= max_display:
+            message_parts.append("\n• " + "\n• ".join(duplicate_names))
+        else:
+            message_parts.append("\n• " + "\n• ".join(duplicate_names[:max_display]))
+            message_parts.append(f"\n... 还有 {duplicate_count - max_display} 个文件")
+
+        message = "\n".join(message_parts)
+        QMessageBox.information(self.view, "重复文件提示", message, QMessageBox.Ok)
+
     def _show_file_exists_message(self, file_path: str) -> None:
         """显示文件已存在的消息
 
@@ -285,7 +345,7 @@ class UploadController(QObject):
         )
 
     def _handle_file_validation_results(
-            self, valid_files: List[str], invalid_files: List[str], total_count: int = 0
+        self, valid_files: List[str], invalid_files: List[str], total_count: int = 0
     ) -> None:
         """处理文件验证结果
 
@@ -302,7 +362,7 @@ class UploadController(QObject):
             self._add_files_to_list(valid_files)
 
     def _show_invalid_files_message(
-            self, invalid_files: List[str], valid_count: int = 0, total_count: int = 0
+        self, invalid_files: List[str], valid_count: int = 0, total_count: int = 0
     ) -> None:
         """显示无效文件消息
 
@@ -624,7 +684,7 @@ class UploadController(QObject):
         worker = ExtractDataWorker(
             self.uploaded_files.copy(),
             process_directory=False,
-            original_file_mapping=file_name_mapping
+            original_file_mapping=file_name_mapping,
         )
         worker.finished.connect(self._on_worker_finished)
         worker.status_updated.connect(self._on_status_updated)
@@ -643,7 +703,7 @@ class UploadController(QObject):
         conversion_worker = DocumentConversionWorker(
             self.uploaded_files,
             output_dir,
-            original_file_mapping=self.file_path_mapping
+            original_file_mapping=self.file_path_mapping,
         )
         conversion_worker.conversion_finished.connect(self._on_conversion_finished)
         conversion_worker.status_updated.connect(self._on_status_updated)
@@ -651,7 +711,7 @@ class UploadController(QObject):
         self.current_workers.append(conversion_worker)
 
     def _on_conversion_finished(
-            self, converted_files, file_mapping, success, error_msg, excel_result=None
+        self, converted_files, file_mapping, success, error_msg, excel_result=None
     ):
         """处理转换完成事件"""
         self._cleanup_worker()
@@ -819,7 +879,8 @@ class UploadController(QObject):
             filename_contract_mapping = {}
             for filename in filename_list:
                 import re
-                contract_number = re.split(r'[-—–]+', filename)
+
+                contract_number = re.split(r"[-—–]+", filename)
                 if len(contract_number) > 1 and contract_number[0]:
                     contract_number = contract_number[0]
                     flag = True
@@ -831,7 +892,7 @@ class UploadController(QObject):
                     for item in data:
                         filename = os.path.basename(item["源文件"])
                         if filename_contract_mapping.get(filename):
-                            item['外销合同'] = filename_contract_mapping.get(filename)
+                            item["外销合同"] = filename_contract_mapping.get(filename)
 
             print(f"开始处理提取成功的数据: {len(data)} 条记录")
             # 立即更新UI状态，显示数据处理进度
@@ -920,7 +981,7 @@ class UploadController(QObject):
 
     def _cleanup_temp_files(self):
         """清理临时文件目录"""
-        if hasattr(self, 'temp_dir') and self.temp_dir.exists():
+        if hasattr(self, "temp_dir") and self.temp_dir.exists():
             try:
                 shutil.rmtree(str(self.temp_dir))
                 logger.info(f"清理临时文件目录成功: {self.temp_dir}")
