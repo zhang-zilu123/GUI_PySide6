@@ -47,13 +47,13 @@ def split_excel_sheets(input_file, output_dir):
             if used_range.value:
                 # 复制单元格内容和格式
                 used_range.copy(new_sheet.range("A1"))
-                
+
                 # 复制列宽
                 for col_idx in range(1, used_range.columns.count + 1):
                     col_letter = xw.utils.col_name(col_idx)
                     original_width = sheet.range(f"{col_letter}:{col_letter}").column_width
                     new_sheet.range(f"{col_letter}:{col_letter}").column_width = original_width
-                
+
                 # 复制行高
                 for row_idx in range(1, used_range.rows.count + 1):
                     original_height = sheet.range(f"{row_idx}:{row_idx}").row_height
@@ -106,5 +106,50 @@ def convert_excel_to_images(file_paths, output_dir):
             except Exception as e:
                 print(f"转换 '{input_file}' 时出错: {e}")
 
+# 保留Excel文件格式，调整列宽
+def auto_adjust_excel_column_width(input_file, output_file):
+    """
+    使用xlwings包将给定的Excel文件调整列宽，并保留原始格式（字体、颜色、边框等）。
+
+    参数：
+        input_file (str): 输入Excel文件路径。
+        output_file (str): 输出Excel文件路径。
+
+    返回：
+        None
+    """
+    app = xw.App(visible=False)
+    try:
+        # 打开工作簿
+        wb = app.books.open(input_file)
+
+        # 遍历工作簿中的所有工作表
+        for sheet in wb.sheets:
+            # 获取使用的范围
+            used_range = sheet.used_range
+
+            if used_range.value:
+                # 自动调整列宽
+                for col_idx in range(1, used_range.columns.count + 1):
+                    col_letter = xw.utils.col_name(col_idx)
+                    col_range = sheet.range(f"{col_letter}:{col_letter}")
+
+                    # 自动调整列宽
+                    col_range.autofit()
+
+                print(f"已调整工作表 '{sheet.name}' 的列宽")
+
+        # 保存到输出文件
+        wb.save(output_file)
+        wb.close()
+        print(f"已将调整后的Excel保存到 '{output_file}'")
+
+    except Exception as e:
+        print(f"调整Excel列宽时出错: {e}")
+        raise
+    finally:
+        app.quit()
+
 if __name__ == "__main__":
     print('Excel处理工具模块已加载')
+    auto_adjust_excel_column_width('2、主表+子块布局.xls', '调整列宽后.xlsx')

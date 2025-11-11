@@ -2,7 +2,8 @@ import json
 import os
 from typing import List
 
-from config.config import LAYOUT_IDENTIFY_PROMPT, HEADER_ROW_DETECTION_PROMPT, CORRECTION_PROMPT
+from config.config import LAYOUT_IDENTIFY_PROMPT, HEADER_ROW_DETECTION_PROMPT, CORRECTION_PROMPT, \
+    EXCEL_TABLE_EXTRACTION_PROMPT
 from dashscope import MultiModalConversation, Generation
 from dotenv import load_dotenv
 
@@ -55,6 +56,25 @@ def correct_excel_table(file_paths: List[str], markdown_content: str) -> dict:
         {
             "role": "user",
             "content": content,
+        }
+    ]
+    response = MultiModalConversation.call(
+        api_key=os.getenv("DASHSCOPE_API_KEY2"),
+        model="qwen3-vl-plus",
+        messages=messages,
+    )
+    return response.get("output").choices[0].get("message").get("content")[0].get("text")
+
+# 提取图片的数据输出markdown
+def extract_excel_data_to_markdown(file_paths: List[str]) -> dict:
+    content = []
+    for file_path in file_paths:
+        content.append({"image": file_path})
+    content.append({"text": EXCEL_TABLE_EXTRACTION_PROMPT})
+    messages = [
+        {
+            "role": "user",
+            "content": content
         }
     ]
     response = MultiModalConversation.call(

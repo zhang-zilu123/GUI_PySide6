@@ -1,11 +1,7 @@
-import json
 import os
 import dashscope
 import xlwings as xw
-from dashscope import Generation
 from dotenv import load_dotenv
-
-from config.config import HEADER_ROW_DETECTION_PROMPT
 
 load_dotenv()
 
