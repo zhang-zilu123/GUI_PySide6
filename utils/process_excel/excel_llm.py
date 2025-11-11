@@ -3,6 +3,7 @@ import os
 import time
 
 from typing import List
+from pathlib import Path
 
 from config.config import LAYOUT_IDENTIFY_PROMPT, HEADER_ROW_DETECTION_PROMPT, CORRECTION_PROMPT, \
     EXCEL_TABLE_EXTRACTION_PROMPT
@@ -16,6 +17,7 @@ def detect_excel_layout(file_paths: List[str]) -> dict:
     print('detect_excel_layout', file_paths[0])
     content = []
     for file_path in file_paths:
+        file_path = f"file://{Path(file_path).as_posix()}"
         content.append({"image": file_path})
     content.append({"text": LAYOUT_IDENTIFY_PROMPT})
     messages = [
@@ -105,8 +107,8 @@ def correct_excel_table(file_paths: List[str], markdown_content: str) -> str:
 # 提取图片的数据输出markdown
 def extract_excel_data_to_markdown(file_paths: List[str]) -> str:
     content = []
-    print("file_paths:", file_paths[0])
     for file_path in file_paths:
+        file_path = f"file://{Path(file_path).as_posix()}"
         content.append({"image": file_path})
     content.append({"text": EXCEL_TABLE_EXTRACTION_PROMPT})
     messages = [
@@ -123,17 +125,4 @@ def extract_excel_data_to_markdown(file_paths: List[str]) -> str:
     return response.get("output").choices[0].get("message").get("content")[0].get("text")
 
 if __name__ == "__main__":
-    with open('output.md', 'r', encoding='utf-8') as f:
-        md_content = f.read()
-
-    file_path = ['./imgs/Sheet_rows_1_to_40.png',
-                 './imgs/Sheet_rows_41_to_80.png',
-                 './imgs/Sheet_rows_81_to_120.png',
-                 './imgs/Sheet_rows_121_to_160.png',
-                 './imgs/Sheet_rows_161_to_178.png', ]
-    # 计时开始
-    start_time = time.time()
-    correct_excel_table(file_path, md_content)
-    # 计时结束
-    end_time = time.time()
-    print(f"函数运行时间: {end_time - start_time:.4f} 秒")
+    print("Excel LLM Utils Test")

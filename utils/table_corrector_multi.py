@@ -17,7 +17,6 @@ from difflib import SequenceMatcher
 from config.config import CORRECTION_PROMPT
 from utils.model_md_to_json import extract_info_from_md
 
-
 class TableExtractor:
     """从 HTML 中提取表格的解析器"""
 
@@ -35,14 +34,13 @@ class TableExtractor:
             print(f"提取表格时出错: {e}")
             return []
 
-
 class QwenVLMaxClient:
     """qwen-vl-max 模型调用客户端 - OpenAI 兼容模式"""
 
     def __init__(
-        self,
-        api_key: str,
-        base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            self,
+            api_key: str,
+            base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1",
     ):
         self.client = OpenAI(
             api_key=api_key,
@@ -55,17 +53,17 @@ class QwenVLMaxClient:
             return base64.b64encode(image_file.read()).decode("utf-8")
 
     def call_model(
-        self, prompt: str, image_path: str, retry_count: int = 0
+            self, prompt: str, image_path: str, retry_count: int = 0
     ) -> Dict[str, Any]:
         """调用qwen-vl-max模型"""
         try:
             # 构造消息体
             image_b64 = self.encode_image(image_path)
 
-            print(f"发送请求到: qwen-vl-max-latest (OpenAI兼容模式)")
+            print(f"发送请求到: qwen3-vl-plus (OpenAI兼容模式)")
 
             completion = self.client.chat.completions.create(
-                model="qwen-vl-max-latest",
+                model="qwen3-vl-plus",
                 messages=[
                     {
                         "role": "user",
@@ -103,7 +101,6 @@ class QwenVLMaxClient:
             print(f"异常: {error_msg}")
             return {"error": error_msg, "retry_count": retry_count}
 
-
 class TableValidator:
     """表格输出质检器"""
 
@@ -119,7 +116,7 @@ class TableValidator:
         # 检查HTML是否合法
         try:
             if not table_html.strip().startswith(
-                "<table"
+                    "<table"
             ) or not table_html.strip().endswith("</table>"):
                 errors.append("HTML表格格式不完整")
         except Exception as e:
@@ -153,7 +150,7 @@ class TableValidator:
         return amounts
 
     def check_sum_consistency(
-        self, table_html: str, expected_sum: Optional[float]
+            self, table_html: str, expected_sum: Optional[float]
     ) -> Tuple[bool, float, str]:
         """检查表格中金额的合计一致性"""
         amounts = self.extract_amounts(table_html)
@@ -172,7 +169,6 @@ class TableValidator:
         notes += f"，预期合计: {expected_sum:.2f}，差值: {delta:.2f}"
 
         return is_consistent, calculated_sum, notes
-
 
 class TableCorrector:
     """统一的表格纠错器 - 支持多文件批量处理"""
@@ -244,7 +240,7 @@ class TableCorrector:
         return matcher.ratio()
 
     def _create_table_image_mapping(
-        self, md_tables: List[str], json_data: dict, images_dir: Path
+            self, md_tables: List[str], json_data: dict, images_dir: Path
     ) -> Dict[int, str]:
         """使用相似度匹配创建表格-图片映射"""
         print("开始创建表格-图片映射...")
@@ -404,11 +400,11 @@ class TableCorrector:
             return None
 
     def _process_single_table(
-        self,
-        table_html: str,
-        table_index: int,
-        image_path: str,
-        expected_sum: Optional[float],
+            self,
+            table_html: str,
+            table_index: int,
+            image_path: str,
+            expected_sum: Optional[float],
     ) -> Dict[str, Any]:
         """处理单个表格"""
         table_report = {
@@ -455,8 +451,8 @@ class TableCorrector:
             if not corrected_table:
                 print(f"表格 {table_index + 1} 第一次处理失败，尝试重试...")
                 retry_prompt = (
-                    prompt
-                    + "\n\n上次输出包含了额外内容，请严格只输出一个 <table>...</table>，不要任何解释："
+                        prompt
+                        + "\n\n上次输出包含了额外内容，请严格只输出一个 <table>...</table>，不要任何解释："
                 )
                 retry_response = client.call_model(
                     retry_prompt, image_path, retry_count=1
@@ -761,7 +757,6 @@ class TableCorrector:
 
         return results
 
-
 def main():
     """主函数"""
     # 配置
@@ -796,7 +791,6 @@ def main():
     #     json.dump(results, f, ensure_ascii=False, indent=2)
     #
     # print(f"详细报告已保存到: {summary_file}")
-
 
 if __name__ == "__main__":
     main()
