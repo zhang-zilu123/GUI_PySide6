@@ -25,7 +25,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-URL = os.getenv("URL")
+URL = os.getenv("PROD_URL")
 
 logger = get_preview_logger()
 error_logger = get_error_logger()
@@ -418,7 +418,7 @@ class PreviewController(QObject):
         logger.info(f"上传{count_outside_sales_contracts_in_data(processed_data)}个外销合同号")
         logger.info(f"上传{len(processed_data)}条费用明细")
         upload_response = self._upload_to_server(processed_data)
-
+        upload_all_logs()
         if upload_response is not None:
             self._handle_upload_result(upload_response, processed_data)
 
@@ -545,6 +545,9 @@ class PreviewController(QObject):
 
         # 保存上传记录
         self._save_upload_record(save_data)
+
+        # 上传所有日志文件
+        upload_all_logs()
 
         # 发出最终上传信号
         self.data_manager.set_current_data(self.data)

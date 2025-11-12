@@ -208,7 +208,7 @@ class ExcelProcessHandler:
         print(f"{'=' * 60}\n")
 
         # 处理顺序：1(扁平式) -> 3(分块式) -> 2(主表+子表) -> 0(其他)
-        process_order = [1, 3, 0, 2]
+        process_order = [1, 3, 2, 0]
 
         for layout_type in process_order:
             if layout_type not in layout_groups:

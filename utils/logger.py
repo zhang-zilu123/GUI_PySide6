@@ -80,7 +80,7 @@ class LoggerManager:
 
             # 日志格式
             formatter = logging.Formatter(
-                "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+                "%(asctime)s - %(levelname)s - %(message)s",
                 datefmt="%Y-%m-%d %H:%M:%S",
             )
             file_handler.setFormatter(formatter)
@@ -325,30 +325,34 @@ def upload_all_logs() -> None:
             'success': bool,
             'uploaded_files': list,
             'failed_files': list,
-            'error_message': str
+            'error_message': strz
         }
     """
     from utils.upload_file_to_oss import up_local_file
+    import glob
 
-    current_time = datetime.now().strftime("%Y%m%d-%H%M")
-
-    # 需要上传的日志文件列表
-    log_files = [
-        f"./log/{current_time}-上传文件.log",  # upload + file_conversion
-        f"./log/{current_time}-提交至OA数据库.log",  # preview
-        f"./log/{current_time}-错误日志.log",  # error
+    # 定义日志文件名模式
+    log_patterns = [
+        "./log/*-上传文件.log",  # upload + file_conversion
+        "./log/*-提交至OA数据库.log",  # preview
+        "./log/*-错误日志.log",  # error
     ]
 
-    for log_file in log_files:
-        if os.path.exists(log_file):
-            # 检查文件大小，如果大于0KB才上传
-            if os.path.getsize(log_file) > 0:
-                up_local_file(
-                    log_file, object_prefix="chatbot_25_0528/muai-models/cost_ident/log"
-                )
-            else:
-                print(f"文件 {log_file} 大小为0KB，跳过上传")
-    print('所有日志文件上传完成')
+    # 查找并上传所有匹配的日志文件
+    for pattern in log_patterns:
+        # 查找所有匹配的文件
+        matched_files = glob.glob(pattern)
+
+        if matched_files:
+            # 按修改时间排序，上传最新的文件
+            matched_files.sort(key=os.path.getmtime, reverse=True)
+            log_file = matched_files[0]  # 取最新的文件
+            if os.path.exists(log_file):
+                # 检查文件大小，如果大于0KB才上传
+                if os.path.getsize(log_file) > 0:
+                    up_local_file(
+                        log_file, object_prefix="chatbot_25_0528/muai-models/cost_ident/log"
+                    )
 
 # ==================== 使用示例 ====================
 if __name__ == "__main__":

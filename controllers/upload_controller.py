@@ -20,7 +20,6 @@ from utils.upload_file_to_oss import up_local_file
 logger = get_upload_logger()
 error_logger = get_error_logger()
 
-
 class UploadController(QObject):
     """上传功能控制器
 
@@ -286,8 +285,8 @@ class UploadController(QObject):
             已上传的文件名列表
         """
         if (
-            not hasattr(self.data_manager, "uploaded_file_name")
-            or not self.data_manager.uploaded_file_name
+                not hasattr(self.data_manager, "uploaded_file_name")
+                or not self.data_manager.uploaded_file_name
         ):
             return []
         if isinstance(self.data_manager.uploaded_file_name, str):
@@ -348,7 +347,7 @@ class UploadController(QObject):
         )
 
     def _handle_file_validation_results(
-        self, valid_files: List[str], invalid_files: List[str], total_count: int = 0
+            self, valid_files: List[str], invalid_files: List[str], total_count: int = 0
     ) -> None:
         """处理文件验证结果
 
@@ -365,7 +364,7 @@ class UploadController(QObject):
             self._add_files_to_list(valid_files)
 
     def _show_invalid_files_message(
-        self, invalid_files: List[str], valid_count: int = 0, total_count: int = 0
+            self, invalid_files: List[str], valid_count: int = 0, total_count: int = 0
     ) -> None:
         """显示无效文件消息
 
@@ -714,7 +713,7 @@ class UploadController(QObject):
         self.current_workers.append(conversion_worker)
 
     def _on_conversion_finished(
-        self, converted_files, file_mapping, success, error_msg, excel_result=None
+            self, converted_files, file_mapping, success, error_msg, excel_result=None
     ):
         """处理转换完成事件"""
         self._cleanup_worker()
@@ -876,16 +875,13 @@ class UploadController(QObject):
     def _handle_extraction_success(self, filename_str, data):
         """处理提取成功"""
         try:
-            print(f'filename_str213123: {filename_str}, data: {data}")')
             filename_list = [name.strip() for name in filename_str.split(", ")]
             flag = False
             filename_contract_mapping = {}
             for filename in filename_list:
-                import re
-
-                contract_number = re.split(r"[-—–]+", filename)
-                if len(contract_number) > 1 and contract_number[0]:
-                    contract_number = contract_number[0]
+                parts = filename.split("_")
+                if len(parts) > 1 and parts[0]:
+                    contract_number = parts[0]
                     flag = True
                 else:
                     contract_number = None
@@ -990,7 +986,6 @@ class UploadController(QObject):
         if hasattr(self, "temp_dir") and self.temp_dir.exists():
             try:
                 shutil.rmtree(str(self.temp_dir))
-                logger.info(f"清理临时文件目录成功: {self.temp_dir}")
                 # 重新创建临时目录
                 self.temp_dir.mkdir(parents=True, exist_ok=True)
                 # 清空映射

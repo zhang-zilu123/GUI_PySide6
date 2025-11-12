@@ -10,13 +10,10 @@ from PySide6.QtWidgets import (
     QStatusBar,
     QMessageBox,
     QTabWidget,
-    QSizePolicy,
 )
-from PySide6.QtCore import Qt
 
 from controllers.history_controller import HistoryController
 from data.data_manager import DataManager
-from utils.logger import upload_all_logs
 from views.upload_view import UploadView
 from views.edit_view import EditView
 from views.preview_view import PreviewView
@@ -241,7 +238,6 @@ class MainWindow(QMainWindow):
             QMessageBox.No,
         )
         if reply == QMessageBox.Yes:
-            upload_all_logs()
             event.accept()
         else:
             event.ignore()
