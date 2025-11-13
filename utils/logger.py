@@ -189,8 +189,19 @@ def get_history_logger() -> logging.Logger:
 def get_edit_logger() -> logging.Logger:
     """获取编辑模块的日志记录器"""
     current_time = datetime.now().strftime("%Y%m%d-%H%M")
-    log_file = f"{current_time}-编辑.log"
-    return LoggerManager.get_logger("edit", log_file)
+    log_file = f"{current_time}-编辑页面.log"
+    logger = LoggerManager.get_logger("edit", log_file)
+
+    if not hasattr(get_edit_logger, "_device_logged"):
+        try:
+            with open("./device_id.txt", "r", encoding="utf-8") as f:
+                content = f.read().strip()
+                logger.info(f"device_id: {content}")
+            get_edit_logger._device_logged = True
+        except Exception as e:
+            logger.error(f"无法读取 device_id: {e}")
+
+    return logger
 
 def get_preview_logger() -> logging.Logger:
     """获取预览模块的日志记录器"""
@@ -335,6 +346,7 @@ def upload_all_logs() -> None:
     log_patterns = [
         "./log/*-上传文件.log",  # upload + file_conversion
         "./log/*-提交至OA数据库.log",  # preview
+        "./log/*-编辑页面.log",  # edit
         "./log/*-错误日志.log",  # error
     ]
 

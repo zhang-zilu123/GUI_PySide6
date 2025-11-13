@@ -19,10 +19,12 @@ from PySide6.QtWidgets import (
 
 from config.config import EXTRA_FIELD
 from utils.common import generate_light_colors, count_outside_sales_contracts
-from utils.logger import get_file_conversion_logger, get_error_logger
+from utils.logger import get_error_logger, get_edit_logger, get_file_conversion_logger
 
 logger = get_file_conversion_logger()
+edit_logger = get_edit_logger()
 error_logger = get_error_logger()
+
 
 class EditController(QObject):
     """编辑功能控制器
@@ -51,6 +53,7 @@ class EditController(QObject):
         self.view._controller = self
         self.data: Optional[List[Dict[str, Any]]] = None
         self.current_data: Optional[List[Dict[str, Any]]] = None
+        self.edit_tracking_enabled = False  # 编辑跟踪开关
         self._connect_signals()
 
     def _connect_signals(self) -> None:
@@ -61,6 +64,7 @@ class EditController(QObject):
             self._on_context_menu_requested
         )
         self.view.data_table.cellClicked.connect(self._on_cell_clicked)
+        self.view.data_table.itemChanged.connect(self._on_item_changed)
         # 设置表格支持多选
         self.view.data_table.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.view.data_table.setSelectionBehavior(QAbstractItemView.SelectItems)
@@ -101,10 +105,12 @@ class EditController(QObject):
         contract_colors = self._generate_contract_colors(data_list)
 
         # 按照EXTRA_FIELD中的顺序填充表格数据
+        self.edit_tracking_enabled = False  # 填充数据时禁用跟踪
         self._populate_table_data(data_list, contract_colors)
+        self.edit_tracking_enabled = True  # 填充完成后启用跟踪
 
     def _populate_table_data(
-            self, data_list: List[Dict[str, Any]], contract_colors: Dict[tuple, str]
+        self, data_list: List[Dict[str, Any]], contract_colors: Dict[tuple, str]
     ) -> None:
         """填充表格数据
 
@@ -149,7 +155,7 @@ class EditController(QObject):
         item.setForeground(Qt.blue)
 
     def _generate_contract_colors(
-            self, data_list: List[Dict[str, Any]]
+        self, data_list: List[Dict[str, Any]]
     ) -> Dict[tuple, str]:
         """为不同的外销合同+货币代码组合生成颜色映射
 
@@ -180,7 +186,45 @@ class EditController(QObject):
 
         return contract_colors
 
-        return contract_colors
+    def _on_item_changed(self, item: QTableWidgetItem) -> None:
+        """处理单元格内容变化事件
+
+        Args:
+            item: 被修改的表格项
+        """
+        if not self.edit_tracking_enabled:
+            return
+
+        try:
+            row = item.row()
+            col = item.column()
+            new_value = item.text()
+
+            # 获取字段名
+            header_item = self.view.data_table.horizontalHeaderItem(col)
+            field_name = header_item.text() if header_item else f"列{col}"
+
+            # 获取外销合同号（第0列）
+            contract_item = self.view.data_table.item(row, 0)
+            contract_value = contract_item.text() if contract_item else ""
+
+            # 从原始数据中获取旧值
+            old_value = ""
+            if self.current_data and row < len(self.current_data):
+                old_value = str(self.current_data[row].get(field_name, ""))
+
+            # 只记录真正发生变化的修改
+            if old_value != new_value:
+                edit_info = {
+                    "外销合同号": contract_value,
+                    "字段": field_name,
+                    "原值": old_value,
+                    "新值": new_value,
+                }
+                edit_logger.info(f"用户编辑单元格: {edit_info}")
+
+        except Exception as e:
+            error_logger.error(f"跟踪单元格修改时出错: {str(e)}")
 
     def _on_cell_clicked(self, row: int, column: int) -> None:
         """处理单元格点击事件
@@ -193,9 +237,7 @@ class EditController(QObject):
         header_item = self.view.data_table.horizontalHeaderItem(column)
         if not header_item:
             return
-
         column_name = header_item.text()
-
         # 检查是否点击了"源文件"列
         if column_name == "源文件":
             self._handle_source_file_click(row, column)
@@ -207,22 +249,16 @@ class EditController(QObject):
             row: 行号
             column: 列号
         """
-        print(f"点击了源文件列，行: {row}, 列: {column}")
-
         try:
             # 获取该行的源文件值
             item = self.view.data_table.item(row, column)
             if not item:
                 QMessageBox.warning(self.view, "警告", "无法获取源文件信息")
                 return
-
             source_file = item.text().strip()
             if not source_file:
                 QMessageBox.warning(self.view, "警告", "源文件路径为空")
                 return
-
-            print(f"源文件: {source_file}")
-
             if os.path.exists(source_file):
                 try:
                     os.startfile(source_file)
@@ -232,29 +268,40 @@ class EditController(QObject):
                         self.view,
                         "打开文件失败",
                         error_msg + "\n\n是否要在文件管理器中显示该文件？",
-                        QMessageBox.Yes | QMessageBox.No
+                        QMessageBox.Yes | QMessageBox.No,
                     )
                     if reply == QMessageBox.Yes:
                         try:
                             # 在文件管理器中显示文件
                             import subprocess
-                            subprocess.run(['explorer', '/select,', os.path.normpath(source_file)])
+
+                            subprocess.run(
+                                ["explorer", "/select,", os.path.normpath(source_file)]
+                            )
                         except Exception as explorer_error:
-                            QMessageBox.warning(self.view, "错误", f"无法打开文件管理器: {str(explorer_error)}")
+                            QMessageBox.warning(
+                                self.view,
+                                "错误",
+                                f"无法打开文件管理器: {str(explorer_error)}",
+                            )
             else:
                 reply = QMessageBox.warning(
                     self.view,
                     "文件不存在",
                     f"文件不存在: {source_file}\n\n文件可能已被移动、删除或重命名。\n\n是否要从记录中移除该文件路径？",
-                    QMessageBox.Yes | QMessageBox.No
+                    QMessageBox.Yes | QMessageBox.No,
                 )
                 if reply == QMessageBox.Yes:
                     item.setText("")  # 清空源文件路径
                     self._collect_current_data()  # 更新数据
-                    QMessageBox.information(self.view, "提示", "已清空该记录的源文件路径")
+                    QMessageBox.information(
+                        self.view, "提示", "已清空该记录的源文件路径"
+                    )
 
         except Exception as e:
-            QMessageBox.critical(self.view, "错误", f"处理源文件点击时发生错误: {str(e)}")
+            QMessageBox.critical(
+                self.view, "错误", f"处理源文件点击时发生错误: {str(e)}"
+            )
 
     def _on_context_menu_requested(self, pos) -> None:
         """处理右键菜单请求
@@ -271,7 +318,7 @@ class EditController(QObject):
 
         # 获取当前选中的项
         selected_items = self.view.data_table.selectedItems()
-
+        operate_data = self._get_selected_rows(selected_items)
         if len(selected_items) > 1:
             # 如果选中了多个单元格，添加批量操作选项
             batch_edit_action = menu.addAction(
@@ -284,39 +331,56 @@ class EditController(QObject):
 
             # 获取选中单元格涉及的所有行
             selected_rows = set(item.row() for item in selected_items)
+
             if len(selected_rows) > 1:
                 # 如果涉及多行，显示删除多行选项
-                delete_rows_action = menu.addAction(f"删除所选单元格对应的行 ({len(selected_rows)}行)")
-                delete_rows_action.triggered.connect(lambda: self._delete_selected_rows(selected_rows))
-            else:
-                # 如果只涉及一行，显示删除单行选项
-                delete_action = menu.addAction("删除此行")
-                delete_action.triggered.connect(lambda: self.delete_row(row))
+                delete_rows_action = menu.addAction(
+                    f"删除所选单元格对应的行 ({len(selected_rows)}行)"
+                )
+                delete_rows_action.triggered.connect(
+                    lambda: self._delete_selected_rows(selected_rows, operate_data)
+                )
         else:
             batch_clear_action = menu.addAction("清空所选单元格")
             batch_clear_action.triggered.connect(self._batch_clear_cells)
             delete_action = menu.addAction("删除此行")
-            delete_action.triggered.connect(lambda: self.delete_row(row))
+            delete_action.triggered.connect(lambda: self.delete_row(row, operate_data))
 
         add_action = menu.addAction("在下方增加一行")
         add_action.triggered.connect(lambda: self.add_row(row))
 
         menu.exec(self.view.data_table.mapToGlobal(pos))
 
-    def _delete_selected_rows(self, selected_rows: set) -> None:
+    def _get_selected_rows(self, selected_items) -> List:
+        row_values = []
+        for item in selected_items:
+            row = item.row()
+            table_widget = selected_items[0].tableWidget()  # 获取表格控件
+            column_count = table_widget.columnCount()  # 获取列数
+            # 遍历该行的所有列，获取每个单元格的值
+            for col in range(column_count):
+                item = table_widget.item(row, col)
+                if item is not None:
+                    row_values.append(item.text())
+                else:
+                    row_values.append("")  # 如果单元格为空，添加空字符串
+        return row_values
+
+    def _delete_selected_rows(self, selected_rows: set, data: List) -> None:
         """删除选中的多行
 
         Args:
             selected_rows: 要删除的行号集合
+            data: 删除的数据列表
         """
         try:
             # 确认删除操作
             reply = QMessageBox.question(
                 self.view,
-                '确认删除',
-                f'确定要删除所选的 {len(selected_rows)} 行数据吗？\n\n此操作不可撤销。',
+                "确认删除",
+                f"确定要删除所选的 {len(selected_rows)} 行数据吗？\n\n此操作不可撤销。",
                 QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No
+                QMessageBox.No,
             )
 
             if reply != QMessageBox.Yes:
@@ -324,28 +388,23 @@ class EditController(QObject):
 
             # 将行号转换为列表并按降序排列，这样从后往前删除不会影响前面的行号
             rows_to_delete = sorted(list(selected_rows), reverse=True)
-
             # 从后往前删除行，避免行号变化的问题
+            self.edit_tracking_enabled = False
             for row in rows_to_delete:
                 if 0 <= row < self.view.data_table.rowCount():
                     self.view.data_table.removeRow(row)
+            self.edit_tracking_enabled = True
 
             # 更新数据
             self._collect_current_data()
-
+            edit_logger.info(f"删除多行的数据，共{len(rows_to_delete)}行: {data}")
             # 显示删除成功消息
             QMessageBox.information(
-                self.view,
-                '删除完成',
-                f'已成功删除 {len(rows_to_delete)} 行数据'
+                self.view, "删除完成", f"已成功删除 {len(rows_to_delete)} 行数据"
             )
 
         except Exception as e:
-            QMessageBox.critical(
-                self.view,
-                '删除失败',
-                f'删除行时发生错误: {str(e)}'
-            )
+            QMessageBox.critical(self.view, "删除失败", f"删除行时发生错误: {str(e)}")
 
     def _batch_edit_cells(self) -> None:
         """批量编辑选中的单元格"""
@@ -355,23 +414,54 @@ class EditController(QObject):
                 QMessageBox.warning(self.view, "警告", "请先选择要编辑的单元格")
                 return
 
+            # 记录修改前的数据
+            edit_info = []
+            for item in selected_items:
+                row = item.row()
+                col = item.column()
+                header_item = self.view.data_table.horizontalHeaderItem(col)
+                field_name = header_item.text() if header_item else f"列{col}"
+                original_value = item.text()
+
+                # 获取该行的外销合同号（第0列）
+                contract_item = self.view.data_table.item(row, 0)
+                contract_value = contract_item.text() if contract_item else ""
+
+                edit_info.append(
+                    {
+                        "外销合同号": contract_value,
+                        "字段": field_name,
+                        "原值": original_value,
+                    }
+                )
+
             # 弹出输入对话框
             text, ok = QInputDialog.getText(
                 self.view,
-                '批量修改',
-                f'请输入要设置的值（将应用到{len(selected_items)}个单元格）:'
+                "批量修改",
+                f"请输入要设置的值（将应用到{len(selected_items)}个单元格）:",
             )
 
             if ok and text is not None:
                 try:
-                    # 批量设置值
+                    # 批量设置值时禁用自动跟踪
+                    self.edit_tracking_enabled = False
                     for item in selected_items:
                         if item:
                             item.setText(text)
+                    self.edit_tracking_enabled = True
 
                     # 更新数据
                     self._collect_current_data()
-                    QMessageBox.information(self.view, '提示', f'已批量修改{len(selected_items)}个单元格')
+                    QMessageBox.information(
+                        self.view, "提示", f"已批量修改{len(selected_items)}个单元格"
+                    )
+
+                    # 记录详细的修改日志
+                    for info in edit_info:
+                        info["新值"] = text
+                    edit_logger.info(f"批量修改了{len(edit_info)}个单元格: {edit_info}")
+
                 except Exception as e:
                     QMessageBox.critical(self.view, "错误", f"批量修改失败: {str(e)}")
         except Exception as e:
@@ -383,62 +473,66 @@ class EditController(QObject):
         if not selected_items:
             return
 
+        # 记录清空前的数据
+        clear_info = []
+        for item in selected_items:
+            row = item.row()
+            col = item.column()
+            header_item = self.view.data_table.horizontalHeaderItem(col)
+            field_name = header_item.text() if header_item else f"列{col}"
+            original_value = item.text()
+            if original_value:  # 只记录非空的单元格
+                # 获取该行的外销合同号（第0列）
+                contract_item = self.view.data_table.item(row, 0)
+                contract_value = contract_item.text() if contract_item else ""
+                clear_info.append(
+                    {
+                        "外销合同号": contract_value,
+                        "字段": field_name,
+                        "原值": original_value,
+                    }
+                )
+
         # 确认操作
         reply = QMessageBox.question(
             self.view,
-            '确认操作',
-            f'确定要清空{len(selected_items)}个单元格的内容吗？',
+            "确认操作",
+            f"确定要清空{len(selected_items)}个单元格的内容吗？",
             QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
+            QMessageBox.No,
         )
 
         if reply == QMessageBox.Yes:
-            # 批量清空
+            # 批量清空时禁用自动跟踪
+            self.edit_tracking_enabled = False
             for item in selected_items:
                 item.setText("")
+            self.edit_tracking_enabled = True
 
             # 更新数据
             self._collect_current_data()
-            QMessageBox.information(self.view, '提示', f'已清空{len(selected_items)}个单元格')
+            QMessageBox.information(
+                self.view, "提示", f"已清空{len(selected_items)}个单元格"
+            )
 
-    def _batch_fill_down(self) -> None:
-        """批量向下填充（从第一个选中单元格的值填充到其他选中单元格）"""
-        selected_items = self.view.data_table.selectedItems()
-        if len(selected_items) < 2:
-            QMessageBox.warning(self.view, '警告', '请至少选择2个单元格进行向下填充')
-            return
+            # 记录详细的清空日志
+            if clear_info:
+                edit_logger.info(f"清空了{len(clear_info)}个单元格: {clear_info}")
+            else:
+                edit_logger.info(f"清空了{len(selected_items)}个单元格(均为空值)")
 
-        # 找到最上面的单元格作为源值
-        source_item = min(selected_items, key=lambda item: (item.row(), item.column()))
-        source_value = source_item.text()
-
-        # 确认操作
-        reply = QMessageBox.question(
-            self.view,
-            '确认操作',
-            f'确定要将"{source_value}"填充到{len(selected_items) - 1}个单元格吗？',
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
-        )
-
-        if reply == QMessageBox.Yes:
-            # 批量填充
-            for item in selected_items:
-                if item != source_item:
-                    item.setText(source_value)
-
-            # 更新数据
-            self._collect_current_data()
-            QMessageBox.information(self.view, '提示', f'已向下填充{len(selected_items) - 1}个单元格')
-
-    def delete_row(self, row: int) -> None:
+    def delete_row(self, row: int, data: List) -> None:
         """删除指定行
 
         Args:
             row: 要删除的行号
+            data: 删除的数据列表
         """
+        self.edit_tracking_enabled = False
         self.view.data_table.removeRow(row)
+        self.edit_tracking_enabled = True
         self._collect_current_data()
+        edit_logger.info(f"删除单行的数据 {data}")
 
     def add_row(self, row: int) -> None:
         """在指定行下方增加一行
@@ -451,11 +545,14 @@ class EditController(QObject):
         col_count = self.view.data_table.columnCount()
         custom_color = QColor("#FFF9C4")
 
+        # 新增行时禁用自动跟踪
+        self.edit_tracking_enabled = False
         for col in range(col_count):
             item = QTableWidgetItem("")
             item.setFlags(item.flags() | Qt.ItemIsEditable)
             item.setBackground(custom_color)
             self.view.data_table.setItem(new_row, col, item)
+        self.edit_tracking_enabled = True
 
         self._collect_current_data()
 
@@ -464,15 +561,14 @@ class EditController(QObject):
         # 更新编辑视图中的数据展示
         data = self.data_manager.current_data
         contract_len = count_outside_sales_contracts(data)
-        logger.info(f'涉及{contract_len}个外销合同号')
-        logger.info(f'识别了{len(data)}条费用信息')
+        logger.info(f"涉及{contract_len}个外销合同号")
+        logger.info(f"识别了{len(data)}条费用信息")
         self.data_display(data)
 
     def _on_finish_clicked(self) -> None:
         """处理完成按钮点击事件"""
         # 收集当前数据并发出保存信号
         self._collect_current_data()
-        self.data_manager.set_current_data(self.data)
         self.submit_final.emit()
 
     def _on_temp_save_clicked(self) -> None:
@@ -485,7 +581,6 @@ class EditController(QObject):
 
         QMessageBox.information(self.view, "提示", "数据已保存")
         # 发出数据保存完成信号
-        self.data_manager.set_current_data(self.data)
         self.data_saved.emit()
 
     def _save_temp_data(self) -> bool:
@@ -504,7 +599,9 @@ class EditController(QObject):
                 try:
                     os.makedirs(temp_dir)
                 except OSError as e:
-                    QMessageBox.critical(self.view, "错误", f"创建临时目录失败: {str(e)}")
+                    QMessageBox.critical(
+                        self.view, "错误", f"创建临时目录失败: {str(e)}"
+                    )
                     return False
 
             temp_path = os.path.join(temp_dir, "temp_data.json")
@@ -512,6 +609,7 @@ class EditController(QObject):
             # 检查磁盘空间
             try:
                 import shutil
+
                 free_space = shutil.disk_usage(temp_dir).free
                 if free_space < 1024 * 1024:  # 小于1MB
                     QMessageBox.warning(self.view, "警告", "磁盘空间不足，无法保存数据")
@@ -524,7 +622,9 @@ class EditController(QObject):
 
             # 验证文件是否正确保存
             if not os.path.exists(temp_path) or os.path.getsize(temp_path) == 0:
-                QMessageBox.critical(self.view, "错误", "数据保存失败，文件为空或未创建")
+                QMessageBox.critical(
+                    self.view, "错误", "数据保存失败，文件为空或未创建"
+                )
                 return False
 
             return True
@@ -573,7 +673,8 @@ class EditController(QObject):
                     continue
 
             self.data = data_list
-            print(f"收集到的数据: {len(self.data)}行")
+            self.data_manager.set_current_data(data_list)
+
         except Exception as e:
             QMessageBox.critical(self.view, "错误", f"收集数据时发生错误: {str(e)}")
             self.data = []
