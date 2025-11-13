@@ -218,6 +218,7 @@ class UploadView(QWidget):
         clipboard = QApplication.clipboard()
         mime_data = clipboard.mimeData()
 
+        # 优先处理文件URL
         if mime_data.hasUrls():
             files = []
             for url in mime_data.urls():
@@ -227,6 +228,47 @@ class UploadView(QWidget):
 
             if files:
                 self.files_pasted.emit(files)
+                return
+
+        # 处理截图（剪贴板中的图像）
+        if mime_data.hasImage():
+            image = clipboard.image()
+            if not image.isNull():
+                # 保存图像到临时文件
+                temp_file = self._save_clipboard_image(image)
+                if temp_file:
+                    self.files_pasted.emit([temp_file])
+
+    def _save_clipboard_image(self, image):
+        """保存剪贴板图像到临时文件
+
+        Args:
+            image: QImage对象
+
+        Returns:
+            临时文件路径，失败返回None
+        """
+        try:
+            from datetime import datetime
+            import tempfile
+
+            # 创建临时目录（如果不存在）
+            temp_dir = os.path.join(tempfile.gettempdir(), "data_audit_screenshots")
+            os.makedirs(temp_dir, exist_ok=True)
+
+            # 生成文件名（使用时间戳）
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
+            temp_file_path = os.path.join(temp_dir, f"screenshot_{timestamp}.png")
+
+            # 保存图像
+            if image.save(temp_file_path, "PNG"):
+                return temp_file_path
+            else:
+                print(f"保存截图失败: {temp_file_path}")
+                return None
+        except Exception as e:
+            print(f"保存剪贴板图像时出错: {str(e)}")
+            return None
 
 
 if __name__ == "__main__":
