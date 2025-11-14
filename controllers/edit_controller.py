@@ -18,13 +18,12 @@ from PySide6.QtWidgets import (
 )
 
 from config.config import EXTRA_FIELD
-from utils.common import generate_light_colors, count_outside_sales_contracts
+from utils.common import generate_light_colors
 from utils.logger import get_error_logger, get_edit_logger, get_file_conversion_logger
 
 logger = get_file_conversion_logger()
 edit_logger = get_edit_logger()
 error_logger = get_error_logger()
-
 
 class EditController(QObject):
     """编辑功能控制器
@@ -560,9 +559,6 @@ class EditController(QObject):
         """设置要编辑的数据"""
         # 更新编辑视图中的数据展示
         data = self.data_manager.current_data
-        contract_len = count_outside_sales_contracts(data)
-        logger.info(f"涉及{contract_len}个外销合同号")
-        logger.info(f"识别了{len(data)}条费用信息")
         self.data_display(data)
 
     def _on_finish_clicked(self) -> None:
