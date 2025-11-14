@@ -3,7 +3,7 @@ import json
 import uuid
 import xlwings as xw
 from typing import List, Tuple, Dict, Any
-from PySide6.QtCore import Signal, SignalInstance
+from PySide6.QtCore import SignalInstance
 
 from utils.process_excel.excel_process import (
     convert_xls_to_xlsx,
@@ -80,7 +80,6 @@ class ExcelProcessHandler:
         for file_path, base_name in excel_files:
             # 处理中文文件名
             safe_base_name = self._generate_safe_filename(base_name)
-            print(f"文件名处理: {base_name} -> {safe_base_name}")
 
             # 创建工作目录
             excel_work_dir = os.path.join(
@@ -564,8 +563,6 @@ class ExcelProcessHandler:
 
         safe_name = f"excel_{timestamp}_{unique_id}"
         print(f"中文文件名转换: '{filename}' -> '{safe_name}'")
-        logger.info(f"中文文件名转换: '{filename}' -> '{safe_name}'")
-
         return safe_name
 
     def _is_excel_empty(self, file_path: str) -> bool | None:

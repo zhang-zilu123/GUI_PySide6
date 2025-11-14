@@ -42,23 +42,57 @@ def split_excel_sheets(input_file, output_dir):
             new_sheet = new_wb.sheets[0]
             new_sheet.name = sheet_name
 
-            # 复制整个工作表（包括格式）
+            # 获取实际使用的范围
             used_range = sheet.used_range
             if used_range.value:
-                # 复制单元格内容和格式
-                used_range.copy(new_sheet.range("A1"))
+                # 查找真正有数据的最后一行和最后一列
+                last_row = 0
+                last_col = 0
 
-                # 复制列宽
-                for col_idx in range(1, used_range.columns.count + 1):
+                # 遍历used_range找到实际有数据的最后位置
+                for row_idx in range(1, used_range.last_cell.row + 1):
+                    for col_idx in range(1, used_range.last_cell.column + 1):
+                        cell_value = sheet.range((row_idx, col_idx)).value
+                        # 检查单元格是否有实际数据（非None且非空字符串）
+                        if cell_value is not None and str(cell_value).strip() != "":
+                            last_row = max(last_row, row_idx)
+                            last_col = max(last_col, col_idx)
+
+                # 如果没找到数据，使用默认值
+                if last_row == 0 or last_col == 0:
+                    last_row = used_range.last_cell.row
+                    last_col = used_range.last_cell.column
+
+                print(
+                    f'工作表 "{sheet_name}" - used_range范围: {used_range.last_cell.row}行 x {used_range.last_cell.column}列, 实际数据: {last_row}行 x {last_col}列'
+                )
+
+                # 扩展范围：在最后有数据的行和列基础上再加5行5列
+                extended_last_row = min(last_row + 5, sheet.cells.last_cell.row)
+                extended_last_col = min(last_col + 5, sheet.cells.last_cell.column)
+
+                # 构建扩展后的范围
+                extended_range = sheet.range(
+                    (1, 1), (extended_last_row, extended_last_col)
+                )
+                # 复制扩展范围的单元格内容和格式
+                extended_range.copy(new_sheet.range("A1"))
+                # 复制列宽（只复制到扩展后的列）
+                for col_idx in range(1, extended_last_col + 1):
                     col_letter = xw.utils.col_name(col_idx)
-                    original_width = sheet.range(f"{col_letter}:{col_letter}").column_width
-                    new_sheet.range(f"{col_letter}:{col_letter}").column_width = original_width
-
-                # 复制行高
-                for row_idx in range(1, used_range.rows.count + 1):
+                    original_width = sheet.range(
+                        f"{col_letter}:{col_letter}"
+                    ).column_width
+                    new_sheet.range(f"{col_letter}:{col_letter}").column_width = (
+                        original_width
+                    )
+                # 复制行高（只复制到扩展后的行）
+                for row_idx in range(1, extended_last_row + 1):
                     original_height = sheet.range(f"{row_idx}:{row_idx}").row_height
                     new_sheet.range(f"{row_idx}:{row_idx}").row_height = original_height
-
+                print(
+                    f"工作表 '{sheet_name}' 实际数据范围: {last_row}行 x {last_col}列, 扩展后: {extended_last_row}行 x {extended_last_col}列"
+                )
             # 保存新的工作簿
             output_file = os.path.join(output_dir, f"{sheet_name}.xlsx")
             try:
@@ -151,5 +185,5 @@ def auto_adjust_excel_column_width(input_file, output_file):
         app.quit()
 
 if __name__ == "__main__":
-    print('Excel处理工具模块已加载')
-    auto_adjust_excel_column_width('2、主表+子块布局.xls', '调整列宽后.xlsx')
+    print("Excel处理工具模块已加载")
+    auto_adjust_excel_column_width("2、主表+子块布局.xls", "调整列宽后.xlsx")
