@@ -109,7 +109,7 @@ class EditController(QObject):
         self.edit_tracking_enabled = True  # 填充完成后启用跟踪
 
     def _populate_table_data(
-        self, data_list: List[Dict[str, Any]], contract_colors: Dict[tuple, str]
+            self, data_list: List[Dict[str, Any]], contract_colors: Dict[tuple, str]
     ) -> None:
         """填充表格数据
 
@@ -154,7 +154,7 @@ class EditController(QObject):
         item.setForeground(Qt.blue)
 
     def _generate_contract_colors(
-        self, data_list: List[Dict[str, Any]]
+            self, data_list: List[Dict[str, Any]]
     ) -> Dict[tuple, str]:
         """为不同的外销合同+货币代码组合生成颜色映射
 
@@ -212,6 +212,11 @@ class EditController(QObject):
             if self.current_data and row < len(self.current_data):
                 old_value = str(self.current_data[row].get(field_name, ""))
 
+            col_count = self.view.data_table.columnCount()
+            last_col_index = col_count - 1
+            original_file_item = self.view.data_table.item(row, last_col_index)
+            original_file_value = original_file_item.text() if original_file_item else ""
+
             # 只记录真正发生变化的修改
             if old_value != new_value:
                 edit_info = {
@@ -219,6 +224,7 @@ class EditController(QObject):
                     "字段": field_name,
                     "原值": old_value,
                     "新值": new_value,
+                    "源文件": original_file_value,
                 }
                 edit_logger.info(f"用户编辑单元格: {edit_info}")
 
@@ -426,11 +432,17 @@ class EditController(QObject):
                 contract_item = self.view.data_table.item(row, 0)
                 contract_value = contract_item.text() if contract_item else ""
 
+                col_count = self.view.data_table.columnCount()
+                last_col_index = col_count - 1
+                original_file_item = self.view.data_table.item(row, last_col_index)
+                original_file_value = original_file_item.text() if original_file_item else ""
+
                 edit_info.append(
                     {
                         "外销合同号": contract_value,
                         "字段": field_name,
                         "原值": original_value,
+                        "源文件": original_file_value,
                     }
                 )
 
@@ -484,11 +496,16 @@ class EditController(QObject):
                 # 获取该行的外销合同号（第0列）
                 contract_item = self.view.data_table.item(row, 0)
                 contract_value = contract_item.text() if contract_item else ""
+                col_count = self.view.data_table.columnCount()
+                last_col_index = col_count - 1
+                original_file_item = self.view.data_table.item(row, last_col_index)
+                original_file_value = original_file_item.text() if original_file_item else ""
                 clear_info.append(
                     {
                         "外销合同号": contract_value,
                         "字段": field_name,
                         "原值": original_value,
+                        "源文件": original_file_value,
                     }
                 )
 

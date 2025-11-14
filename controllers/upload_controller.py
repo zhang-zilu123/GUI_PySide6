@@ -12,6 +12,7 @@ from PySide6.QtWidgets import QFileDialog, QMessageBox, QHBoxLayout, QPushButton
 from PySide6.QtCore import QObject, Signal, QThread, Qt
 
 from controllers.extract_data_controller import ExtractDataWorker
+from utils.common import count_outside_sales_contracts
 from utils.logger import get_upload_logger, get_error_logger, log_exception, log_error
 from controllers.file_conversion_controller import DocumentConversionWorker
 from utils.upload_file_to_oss import up_local_file
@@ -67,7 +68,6 @@ class UploadController(QObject):
         self.temp_dir = root_dir / "file_temp"
         if not self.temp_dir.exists():
             self.temp_dir.mkdir(parents=True, exist_ok=True)
-            logger.info(f"创建临时文件目录: {self.temp_dir}")
 
     def _copy_file_to_temp(self, original_file_path: str) -> str:
         """将文件复制到临时目录
@@ -79,8 +79,6 @@ class UploadController(QObject):
             临时文件路径
         """
         import shutil
-        import uuid
-        from pathlib import Path
 
         try:
             # 获取原始文件名和扩展名
@@ -181,7 +179,6 @@ class UploadController(QObject):
             # 检查文件是否已经在本次上传列表中（通过原始路径去重）
             if self._is_file_in_current_upload(file_path):
                 duplicate_files.append(file_path)
-                logger.info(f"文件已在本次上传列表中，跳过: {file_path}")
                 continue
 
             if self._validate_file(file_path):
@@ -633,6 +630,7 @@ class UploadController(QObject):
         self.view.title.setText("正在提取识别中，请稍候...")
         self.view.title.setStyleSheet("color: red; font-weight: bold; font-size: 20px;")
 
+        # TODO：上传文件到OSS
         logger.info("开始上传文件到OSS")
         for file in self.uploaded_files:
             file_extension = Path(file).suffix.lower()
@@ -906,6 +904,9 @@ class UploadController(QObject):
             self.processed_files_data = data
             self._merge_and_save_data(filename_str, data)
             self._cleanup_after_success()
+            contract_len = count_outside_sales_contracts(data)
+            logger.info(f"涉及 {contract_len} 个外销合同号")
+            logger.info(f"识别了 {len(data)} 条费用信息")
             print(f"成功处理 {len(data)} 条记录")
             print(
                 f"data_manager 中的数据: {len(self.data_manager.current_data or [])} 条"
@@ -928,16 +929,10 @@ class UploadController(QObject):
             self.view.title.setStyleSheet("")
             # 确保数据已设置
             if hasattr(self, "processed_files_data") and self.processed_files_data:
-                print(
-                    f"发射 file_processed 信号，数据量: {len(self.processed_files_data)}"
-                )
                 self.file_processed.emit()
             else:
                 if self.data_manager.current_data:
                     self.processed_files_data = self.data_manager.current_data
-                    print(
-                        f"从 data_manager 恢复数据: {len(self.processed_files_data)} 条"
-                    )
                     self.file_processed.emit()
                 else:
                     QMessageBox.warning(
@@ -975,8 +970,6 @@ class UploadController(QObject):
                 log_exception(e, "清理转换文件夹时")
 
         # 清理临时文件目录
-        self._cleanup_temp_files()
-
         self.clear_file_list()
         self.view.title.setText("数据审核工具 - 文件上传")
         self.file_processed.emit()
@@ -995,6 +988,24 @@ class UploadController(QObject):
                 logger.error(error_msg)
                 log_exception(e, "清理临时文件目录时")
                 print(error_msg)
+
+        # 清理截图临时文件
+        self._cleanup_screenshot_temp_files()
+
+    def _cleanup_screenshot_temp_files(self):
+        """清理截图临时文件"""
+        try:
+            import tempfile
+
+            screenshot_dir = os.path.join(
+                tempfile.gettempdir(), "data_audit_screenshots"
+            )
+            if os.path.exists(screenshot_dir):
+                shutil.rmtree(screenshot_dir)
+        except Exception as e:
+            error_msg = f"清理截图临时文件失败: {str(e)}"
+            logger.error(error_msg)
+            print(error_msg)
 
     def _handle_extraction_error(self, error_msg):
         """处理提取错误"""
@@ -1055,9 +1066,6 @@ class UploadController(QObject):
             except Exception as e:
                 print(f"清理转换文件夹失败: {str(e)}")
                 log_exception(e, "清理转换文件夹时")
-
-        # 同时清理临时文件
-        self._cleanup_temp_files()
 
     def _show_processing_error(self, error_msg: str, title: str = "处理错误"):
         """显示处理错误对话框
