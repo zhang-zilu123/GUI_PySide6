@@ -936,7 +936,7 @@ class UploadController(QObject):
                     self.file_processed.emit()
                 else:
                     QMessageBox.warning(
-                        self.view, "警告", "数据处理完成，但没有检测到有效数据"
+                        self.view, "警告", "数据处理完成，但没有检测到有效数据。请重新分析文件。"
                     )
         except Exception as e:
             print(f"发射数据就绪信号失败: {str(e)}")
