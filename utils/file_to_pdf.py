@@ -4,108 +4,12 @@
 """
 import os
 import logging
-from typing import Optional
+import pypandoc
+
+from docx2pdf import convert as docx2pdf_convert
 
 # 设置日志
 logger = logging.getLogger(__name__)
-
-try:
-    from docx2pdf import convert as docx2pdf_convert
-except ImportError as e:
-    logger.error(f"导入docx2pdf失败: {e}")
-    docx2pdf_convert = None
-
-try:
-    import pypandoc
-except ImportError as e:
-    logger.error(f"导入pypandoc失败: {e}")
-    pypandoc = None
-
-try:
-    from spire.xls import Workbook, FileFormat
-except ImportError as e:
-    logger.error(f"导入spire.xls失败: {e}")
-    Workbook = None
-    FileFormat = None
-
-
-def excel_to_pdf(excel_path, output_dir):
-    """Excel文档转PDF
-
-    Args:
-        excel_path: 输入Excel文档路径
-        output_dir: 输出目录路径
-
-    Returns:
-        生成的PDF文件路径
-
-    Raises:
-        FileNotFoundError: 输入文件不存在
-        ValueError: 参数无效
-        RuntimeError: 转换失败
-    """
-    try:
-        # 参数验证
-        if not excel_path or not isinstance(excel_path, str):
-            raise ValueError("输入文件路径无效")
-
-        if not output_dir or not isinstance(output_dir, str):
-            raise ValueError("输出目录路径无效")
-
-        # 检查输入文件
-        if not os.path.exists(excel_path):
-            raise FileNotFoundError(f"Excel文档不存在: {excel_path}")
-
-        if not os.path.isfile(excel_path):
-            raise ValueError(f"路径不是文件: {excel_path}")
-
-        # 检查文件大小
-        file_size = os.path.getsize(excel_path)
-        if file_size == 0:
-            raise ValueError("Excel文档为空")
-        elif file_size > 50 * 1024 * 1024:  # 50MB限制
-            raise ValueError(f"Excel文档太大 ({file_size / 1024 / 1024:.1f}MB)，超过50MB限制")
-
-        # 检查依赖
-        if Workbook is None or FileFormat is None:
-            raise RuntimeError("spire.xls库未正确安装，无法进行Excel转PDF")
-
-        print('excel_to_pdf', excel_path, output_dir)
-        os.makedirs(output_dir, exist_ok=True)
-
-        # 生成输出文件名
-        base_name = os.path.splitext(os.path.basename(excel_path))[0]
-        output_path = os.path.join(output_dir, f"{base_name}.pdf")
-
-        # 执行转换
-        workbook = Workbook()
-        try:
-            workbook.LoadFromFile(excel_path)
-            workbook.SaveToFile(output_path, FileFormat.PDF)
-
-            # 验证输出文件
-            if not os.path.exists(output_path):
-                raise RuntimeError("PDF文件未生成")
-            elif os.path.getsize(output_path) == 0:
-                raise RuntimeError("生成的PDF文件为空")
-
-            logger.info(f"Excel转PDF成功: {excel_path} -> {output_path}")
-            return output_path
-
-        finally:
-            workbook.Dispose()
-
-    except Exception as e:
-        error_msg = f"Excel转PDF失败 {excel_path}: {str(e)}"
-        logger.error(error_msg)
-        # 清理可能生成的空文件
-        if 'output_path' in locals() and os.path.exists(output_path) and os.path.getsize(output_path) == 0:
-            try:
-                os.remove(output_path)
-            except:
-                pass
-        raise RuntimeError(error_msg) from e
-
 
 def docx_to_pdf(input_path: str, output_path: str) -> str:
     """Word文档转PDF
@@ -165,8 +69,6 @@ def docx_to_pdf(input_path: str, output_path: str) -> str:
                 raise RuntimeError("PDF文件未生成")
             elif os.path.getsize(output_path) == 0:
                 raise RuntimeError("生成的PDF文件为空")
-
-            logger.info(f"Word转PDF成功: {input_path} -> {output_path}")
             return output_path
 
         except Exception as convert_error:
@@ -182,7 +84,6 @@ def docx_to_pdf(input_path: str, output_path: str) -> str:
         error_msg = f"Word转PDF失败 {input_path}: {str(e)}"
         logger.error(error_msg)
         raise RuntimeError(error_msg) from e
-
 
 def rtf_to_pdf(input_path: str, output_path: str) -> str:
     """RTF文档转PDF
@@ -241,6 +142,7 @@ def rtf_to_pdf(input_path: str, output_path: str) -> str:
 
         try:
             # 第一步：RTF转DOCX
+            pypandoc.__pandoc_path = r'./pandoc.exe'
             pypandoc.convert_file(
                 input_path,
                 'docx',
@@ -262,18 +164,11 @@ def rtf_to_pdf(input_path: str, output_path: str) -> str:
                 raise RuntimeError("PDF文件未生成")
             elif os.path.getsize(output_path) == 0:
                 raise RuntimeError("生成的PDF文件为空")
-
-            logger.info(f"RTF转PDF成功: {input_path} -> {output_path}")
             return output_path
-
         finally:
             # 清理临时文件
             if temp_docx_file and os.path.exists(temp_docx_file):
-                try:
-                    os.remove(temp_docx_file)
-                    logger.info(f"已清理临时文件: {temp_docx_file}")
-                except Exception as cleanup_error:
-                    logger.warning(f"清理临时文件失败: {cleanup_error}")
+                os.remove(temp_docx_file)
 
     except Exception as e:
         error_msg = f"RTF转PDF失败 {input_path}: {str(e)}"
@@ -290,25 +185,5 @@ def rtf_to_pdf(input_path: str, output_path: str) -> str:
 
         raise RuntimeError(error_msg) from e
 
-
-def check_conversion_dependencies() -> dict:
-    """检查转换依赖库的可用性
-    
-    Returns:
-        依赖库状态字典
-    """
-    status = {
-        'docx2pdf': docx2pdf_convert is not None,
-        'pypandoc': pypandoc is not None,
-        'spire_xls': Workbook is not None and FileFormat is not None,
-    }
-
-    missing = [name for name, available in status.items() if not available]
-    status['all_available'] = len(missing) == 0
-    status['missing'] = missing
-
-    return status
-
-
 if __name__ == '__main__':
-    excel_to_pdf('../test.xls', '../test.pdf')
+    print("文件转PDF工具模块")
